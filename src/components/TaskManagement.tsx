@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Search, Filter, Plus, Calendar, Clock, AlertCircle, CheckCircle, User, Building, Users, ArrowLeft, Edit } from 'lucide-react';
+import { Search, Filter, Plus, Calendar, Clock, AlertCircle, CheckCircle, User, Building, Users, ArrowLeft, Edit, LinkIcon } from 'lucide-react';
 import { Task, Customer, Partner, User as UserType } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTaskManager } from '@/hooks/useTaskManager';
 
 interface TaskManagementProps {
   customers: Customer[];
@@ -21,10 +22,12 @@ interface TaskManagementProps {
 
 const TaskManagement = ({ customers, partners, users, currentUserId }: TaskManagementProps) => {
   const { isAdmin } = useAuth();
+  const { tasks, loading, createTask, updateTask, deleteTask, markTaskComplete } = useTaskManager();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [onboardingFilter, setOnboardingFilter] = useState('all');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [newTask, setNewTask] = useState({
@@ -38,68 +41,31 @@ const TaskManagement = ({ customers, partners, users, currentUserId }: TaskManag
     assignedTo: ''
   });
 
-  // Mock task data - in real app this would come from API/database
-  const mockTasks: Task[] = [
-    {
-      id: '1',
-      title: 'Follow up with TechCorp for contract renewal',
-      description: 'Check on their satisfaction with current services and discuss renewal terms',
-      status: 'pending',
-      priority: 'high',
-      dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-      assignedTo: currentUserId || 'user-1',
-      assignedBy: 'manager-1',
-      customerId: 'customer-1',
-      type: 'follow-up',
-      notes: 'Customer mentioned potential expansion during last call'
-    },
-    {
-      id: '2', 
-      title: 'Schedule partner onboarding meeting',
-      description: 'Set up kickoff meeting for new partner integration',
-      status: 'in-progress',
-      priority: 'medium',
-      dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-      updatedAt: new Date(),
-      assignedTo: currentUserId || 'user-1',
-      assignedBy: 'manager-1',
-      partnerId: 'partner-1',
-      type: 'meeting',
-      notes: 'Partner requested morning slot, check calendar availability'
-    },
-    {
-      id: '3',
-      title: 'Review SLA documentation for GlobalTech',
-      description: 'Review and approve updated service level agreement',
-      status: 'overdue',
-      priority: 'urgent',
-      dueDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-      updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-      assignedTo: currentUserId || 'user-1',
-      assignedBy: 'manager-1',
-      customerId: 'customer-2',
-      type: 'document-review',
-      notes: 'Legal team has reviewed, waiting for final approval'
-    },
-    {
-      id: '4',
-      title: 'Complete integration partner KYC process',
-      description: 'Finalize know your customer documentation and compliance checks',
-      status: 'completed',
-      priority: 'medium',
-      dueDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-      updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      assignedTo: currentUserId || 'user-1',
-      assignedBy: 'manager-1',
-      partnerId: 'partner-2',
-      type: 'onboarding'
-    }
-  ];
+  // Filter tasks based on user role and permissions
+  const userRelevantTasks = tasks.filter(task => {
+    if (!currentUserId) return false;
+    // Admin users can see all tasks
+    if (isAdmin) return true;
+    // Regular users can only see tasks assigned to them or assigned by them
+    return task.assignedTo === currentUserId || task.assignedBy === currentUserId;
+  });
+
+  // Filter tasks based on search and filter criteria
+  const filteredTasks = userRelevantTasks.filter(task => {
+    const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         task.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         getCustomerName(task.customerId).toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         getPartnerName(task.partnerId).toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+    const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
+    const matchesType = typeFilter === 'all' || task.type === typeFilter;
+    const matchesOnboarding = onboardingFilter === 'all' || 
+      (onboardingFilter === 'onboarding' && task.isOnboardingTask) ||
+      (onboardingFilter === 'regular' && !task.isOnboardingTask);
+    
+    return matchesSearch && matchesStatus && matchesPriority && matchesType && matchesOnboarding;
+  });
 
   const getStatusIcon = (status: Task['status']) => {
     switch (status) {
@@ -155,27 +121,6 @@ const TaskManagement = ({ customers, partners, users, currentUserId }: TaskManag
     return user ? user.name : 'Unknown User';
   };
 
-  // Filter tasks based on user role and permissions
-  const userRelevantTasks = mockTasks.filter(task => {
-    if (!currentUserId) return false;
-    // Admin users can see all tasks
-    if (isAdmin) return true;
-    // Regular users can only see tasks assigned to them or assigned by them
-    return task.assignedTo === currentUserId || task.assignedBy === currentUserId;
-  });
-
-  const filteredTasks = userRelevantTasks.filter(task => {
-    const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         task.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         getCustomerName(task.customerId).toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         getPartnerName(task.partnerId).toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
-    const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
-    const matchesType = typeFilter === 'all' || task.type === typeFilter;
-    
-    return matchesSearch && matchesStatus && matchesPriority && matchesType;
-  });
 
   const stats = {
     total: userRelevantTasks.length,
@@ -185,24 +130,38 @@ const TaskManagement = ({ customers, partners, users, currentUserId }: TaskManag
     overdue: userRelevantTasks.filter(t => t.status === 'overdue').length
   };
 
-  const handleCreateTask = () => {
-    // In real app, this would save to database
-    const taskWithAssignedBy = {
-      ...newTask,
-      assignedBy: currentUserId || 'unknown'
-    };
-    console.log('Creating task:', taskWithAssignedBy);
-    setShowCreateDialog(false);
-    setNewTask({
-      title: '',
-      description: '',
-      priority: 'medium',
-      type: 'other',
-      customerId: 'none',
-      partnerId: 'none',
-      dueDate: '',
-      assignedTo: ''
-    });
+  const handleCreateTask = async () => {
+    if (!newTask.title || !newTask.assignedTo) {
+      return;
+    }
+
+    try {
+      await createTask({
+        title: newTask.title,
+        description: newTask.description,
+        priority: newTask.priority,
+        type: newTask.type,
+        status: 'pending',
+        assignedTo: newTask.assignedTo,
+        customerId: newTask.customerId === 'none' ? undefined : newTask.customerId,
+        partnerId: newTask.partnerId === 'none' ? undefined : newTask.partnerId,
+        dueDate: newTask.dueDate ? new Date(newTask.dueDate) : undefined,
+      });
+
+      setShowCreateDialog(false);
+      setNewTask({
+        title: '',
+        description: '',
+        priority: 'medium',
+        type: 'other',
+        customerId: 'none',
+        partnerId: 'none',
+        dueDate: '',
+        assignedTo: ''
+      });
+    } catch (error) {
+      console.error('Error creating task:', error);
+    }
   };
 
   if (selectedTask) {
@@ -618,6 +577,7 @@ const TaskManagement = ({ customers, partners, users, currentUserId }: TaskManag
                 <TableHead>Direction</TableHead>
                 <TableHead>Assigned By</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -702,9 +662,42 @@ const TaskManagement = ({ customers, partners, users, currentUserId }: TaskManag
                     <div className="text-sm">{getUserName(task.assignedBy)}</div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className="text-xs">
-                      {task.type.replace('-', ' ')}
-                    </Badge>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="secondary" className="text-xs">
+                        {task.type.replace('-', ' ')}
+                      </Badge>
+                      {task.isOnboardingTask && (
+                        <Badge variant="outline" className="text-xs bg-purple-100 text-purple-700 border-purple-300">
+                          <LinkIcon className="h-3 w-3 mr-1" />
+                          Onboarding
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center space-x-2">
+                      {task.status !== 'completed' && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => markTaskComplete(task.id)}
+                        >
+                          Mark Complete
+                        </Button>
+                      )}
+                      {task.isOnboardingTask && task.partnerId && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => {
+                            // Navigate to partner onboarding - you can implement this navigation
+                            console.log('Navigate to partner onboarding:', task.partnerId);
+                          }}
+                        >
+                          <LinkIcon className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

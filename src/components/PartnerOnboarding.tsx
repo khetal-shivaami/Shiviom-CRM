@@ -6,28 +6,32 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { Search, UserPlus, Filter, CheckCircle, Clock, AlertCircle, Eye, Users, FileText, Handshake, Shield, PenTool, Trophy } from 'lucide-react';
+import { Search, UserPlus, Filter, CheckCircle, Clock, AlertCircle, Eye, Users, FileText, Handshake, Shield, PenTool, Trophy, Link } from 'lucide-react';
 import { Partner, User, OnboardingStage, PartnerOnboardingData } from '@/types';
 import AddPartnerForm from '@/components/AddPartnerForm';
 import PartnerOnboardingDetail from '@/components/PartnerOnboardingDetail';
 import { PartnerStageEditForm } from '@/components/PartnerStageEditForm';
+import { useTaskManager } from '@/hooks/useTaskManager';
+import TaskNavigationBanner from '@/components/TaskNavigationBanner';
 
 interface PartnerOnboardingProps {
   partners: Partner[];
   users: User[];
   onPartnerAdd?: (partner: Partner) => void;
+  onNavigateToTasks?: (partnerId?: string) => void;
 }
 
 interface EnhancedPartner extends Partner {
   onboarding: PartnerOnboardingData;
 }
 
-const PartnerOnboarding = ({ partners, users, onPartnerAdd }: PartnerOnboardingProps) => {
+const PartnerOnboarding = ({ partners, users, onPartnerAdd, onNavigateToTasks }: PartnerOnboardingProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
   const [partnersData, setPartnersData] = useState<EnhancedPartner[]>([]);
+  const { getOnboardingTasks } = useTaskManager();
 
   const stageConfig = {
     'outreach': { title: 'Outreach', icon: Users, color: 'bg-blue-500' },
@@ -237,6 +241,15 @@ const PartnerOnboarding = ({ partners, users, onPartnerAdd }: PartnerOnboardingP
         </div>
       </div>
 
+      {/* Show banner for partners with onboarding tasks */}
+      {filteredPartners.length > 0 && (
+        <TaskNavigationBanner
+          onboardingTasks={filteredPartners.flatMap(partner => getOnboardingTasks(partner.id))}
+          onNavigateToTasks={() => onNavigateToTasks?.()}
+          showOnPartnerOnboarding={true}
+        />
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-8 gap-4">
         {statsData.map((stat) => {
           const IconComponent = stat.icon;
@@ -361,10 +374,24 @@ const PartnerOnboarding = ({ partners, users, onPartnerAdd }: PartnerOnboardingP
                       </div>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <PartnerStageEditForm
-                        partner={partner}
-                        onUpdate={handlePartnerUpdate}
-                      />
+                      <div className="flex items-center space-x-2">
+                        <PartnerStageEditForm
+                          partner={partner}
+                          onUpdate={handlePartnerUpdate}
+                        />
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => {
+                            // Show onboarding tasks for this partner
+                            const tasks = getOnboardingTasks(partner.id);
+                            console.log(`${tasks.length} onboarding tasks for ${partner.name}`);
+                          }}
+                          title="View related tasks"
+                        >
+                          <Link className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
