@@ -7,10 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Search, Edit } from 'lucide-react';
+import { Search, Edit, Plus, ArrowLeft } from 'lucide-react';
 import { Customer, Partner, Product, User } from '../types';
 import CustomerDetail from './CustomerDetail';
 import CustomerTableFilters from './CustomerTableFilters';
+import CustomerForm from './CustomerForm';
 
 interface CustomerManagementProps {
   customers: Customer[];
@@ -19,6 +20,7 @@ interface CustomerManagementProps {
   users: User[];
   onCustomerUpdate?: (customerId: string, updates: Partial<Customer>) => void;
   onBulkAction?: (customerIds: string[], action: string) => void;
+  onCustomerAdd?: (customer: Customer) => void;
 }
 
 const CustomerManagement = ({ 
@@ -27,7 +29,8 @@ const CustomerManagement = ({
   products, 
   users,
   onCustomerUpdate, 
-  onBulkAction 
+  onBulkAction,
+  onCustomerAdd 
 }: CustomerManagementProps) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -36,6 +39,7 @@ const CustomerManagement = ({
   const [zoneFilter, setZoneFilter] = useState('all');
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(customer => {
@@ -81,6 +85,19 @@ const CustomerManagement = ({
 
   const handleBackToList = () => {
     setSelectedCustomer(null);
+  };
+
+  const handleShowAddForm = () => {
+    setShowAddForm(true);
+  };
+
+  const handleBackToCustomerList = () => {
+    setShowAddForm(false);
+  };
+
+  const handleCustomerAdd = (customer: Customer) => {
+    onCustomerAdd?.(customer);
+    setShowAddForm(false);
   };
 
   const handleCustomerUpdate = (customerId: string, updates: Partial<Customer>) => {
@@ -161,6 +178,32 @@ const CustomerManagement = ({
     );
   }
 
+  if (showAddForm) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            onClick={handleBackToCustomerList}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft size={16} />
+            Back to Customer List
+          </Button>
+          <div>
+            <h2 className="text-2xl font-bold">Add New Customer</h2>
+            <p className="text-muted-foreground">Create a new customer record</p>
+          </div>
+        </div>
+        <CustomerForm 
+          partners={partners} 
+          products={products} 
+          onCustomerAdd={handleCustomerAdd} 
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -169,6 +212,10 @@ const CustomerManagement = ({
           <h2 className="text-2xl font-bold">Customer Management</h2>
           <p className="text-muted-foreground">Manage your partner customers and relationships</p>
         </div>
+        <Button onClick={handleShowAddForm} className="flex items-center gap-2">
+          <Plus size={16} />
+          Add Customer
+        </Button>
       </div>
 
       {/* Stats Cards */}

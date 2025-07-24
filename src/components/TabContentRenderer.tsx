@@ -193,28 +193,13 @@ const TabContentRenderer = ({
           users={users}
           onCustomerUpdate={onCustomerUpdate}
           onBulkAction={onBulkAction}
+          onCustomerAdd={onCustomerAdd}
         />
       );
     case 'partner-onboarding':
       return <PartnerOnboarding partners={partners} users={users} onPartnerAdd={onPartnerAdd} />;
     case 'tasks':
       return <TaskManagement customers={customers} partners={partners} users={users} currentUserId={profile?.user_id} />;
-    case 'customers':
-      return (
-        <div className="space-y-6">
-          <CustomerTable 
-            customers={customers} 
-            partners={partners} 
-            products={products}
-            users={users}
-            onStatusChange={handleStatusChange}
-            onBulkStatusChange={handleBulkStatusChange}
-            onBulkImport={onCustomerImport}
-          />
-        </div>
-      );
-    case 'add-customer':
-      return <CustomerForm partners={partners} products={products} onCustomerAdd={onCustomerAdd} />;
     case 'partners':
       return (
         <div className="space-y-6">
