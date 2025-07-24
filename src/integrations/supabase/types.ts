@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      customers: {
+        Row: {
+          assigned_user_ids: string[] | null
+          company: string
+          created_at: string
+          email: string
+          id: string
+          last_edited_at: string | null
+          name: string
+          partner_id: string | null
+          phone: string | null
+          process: string | null
+          product_ids: string[] | null
+          status: string
+          value: number
+          zone: string | null
+        }
+        Insert: {
+          assigned_user_ids?: string[] | null
+          company: string
+          created_at?: string
+          email: string
+          id?: string
+          last_edited_at?: string | null
+          name: string
+          partner_id?: string | null
+          phone?: string | null
+          process?: string | null
+          product_ids?: string[] | null
+          status?: string
+          value?: number
+          zone?: string | null
+        }
+        Update: {
+          assigned_user_ids?: string[] | null
+          company?: string
+          created_at?: string
+          email?: string
+          id?: string
+          last_edited_at?: string | null
+          name?: string
+          partner_id?: string | null
+          phone?: string | null
+          process?: string | null
+          product_ids?: string[] | null
+          status?: string
+          value?: number
+          zone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customers_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       partner_stage_changes: {
         Row: {
           changed_at: string
@@ -92,6 +151,99 @@ export type Database = {
           status?: string
           to_stage?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      partners: {
+        Row: {
+          agreement_date: string | null
+          agreement_signed: boolean
+          assigned_user_ids: string[] | null
+          company: string
+          created_at: string
+          email: string
+          id: string
+          identity: string
+          name: string
+          onboarding_data: Json | null
+          onboarding_stage: string
+          payment_terms: string
+          product_types: string[] | null
+          specialization: string | null
+          status: string
+          zone: string | null
+        }
+        Insert: {
+          agreement_date?: string | null
+          agreement_signed?: boolean
+          assigned_user_ids?: string[] | null
+          company: string
+          created_at?: string
+          email: string
+          id?: string
+          identity: string
+          name: string
+          onboarding_data?: Json | null
+          onboarding_stage?: string
+          payment_terms: string
+          product_types?: string[] | null
+          specialization?: string | null
+          status?: string
+          zone?: string | null
+        }
+        Update: {
+          agreement_date?: string | null
+          agreement_signed?: boolean
+          assigned_user_ids?: string[] | null
+          company?: string
+          created_at?: string
+          email?: string
+          id?: string
+          identity?: string
+          name?: string
+          onboarding_data?: Json | null
+          onboarding_stage?: string
+          payment_terms?: string
+          product_types?: string[] | null
+          specialization?: string | null
+          status?: string
+          zone?: string | null
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          last_edited_at: string | null
+          name: string
+          plans: Json | null
+          status: string
+          website: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          last_edited_at?: string | null
+          name: string
+          plans?: Json | null
+          status?: string
+          website: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          last_edited_at?: string | null
+          name?: string
+          plans?: Json | null
+          status?: string
+          website?: string
         }
         Relationships: []
       }
@@ -189,6 +341,110 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      tasks: {
+        Row: {
+          actual_hours: number | null
+          assigned_by: string | null
+          assigned_to: string | null
+          auto_generated: boolean | null
+          completed_at: string | null
+          created_at: string
+          customer_id: string | null
+          description: string | null
+          due_date: string | null
+          estimated_hours: number | null
+          id: string
+          is_onboarding_task: boolean | null
+          notes: string | null
+          onboarding_stage: string | null
+          partner_id: string | null
+          priority: string
+          stage_requirement: boolean | null
+          status: string
+          tags: string[] | null
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          actual_hours?: number | null
+          assigned_by?: string | null
+          assigned_to?: string | null
+          auto_generated?: boolean | null
+          completed_at?: string | null
+          created_at?: string
+          customer_id?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          id?: string
+          is_onboarding_task?: boolean | null
+          notes?: string | null
+          onboarding_stage?: string | null
+          partner_id?: string | null
+          priority?: string
+          stage_requirement?: boolean | null
+          status?: string
+          tags?: string[] | null
+          title: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          actual_hours?: number | null
+          assigned_by?: string | null
+          assigned_to?: string | null
+          auto_generated?: boolean | null
+          completed_at?: string | null
+          created_at?: string
+          customer_id?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          id?: string
+          is_onboarding_task?: boolean | null
+          notes?: string | null
+          onboarding_stage?: string | null
+          partner_id?: string | null
+          priority?: string
+          stage_requirement?: boolean | null
+          status?: string
+          tags?: string[] | null
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "tasks_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "tasks_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
