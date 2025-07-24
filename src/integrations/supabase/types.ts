@@ -342,6 +342,107 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_report_executions: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          execution_date: string
+          execution_duration_ms: number | null
+          file_path: string | null
+          file_size: number | null
+          id: string
+          scheduled_report_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          execution_date?: string
+          execution_duration_ms?: number | null
+          file_path?: string | null
+          file_size?: number | null
+          id?: string
+          scheduled_report_id: string
+          status: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          execution_date?: string
+          execution_duration_ms?: number | null
+          file_path?: string | null
+          file_size?: number | null
+          id?: string
+          scheduled_report_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_report_executions_scheduled_report_id_fkey"
+            columns: ["scheduled_report_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_reports: {
+        Row: {
+          created_at: string
+          day_of_month: number | null
+          day_of_week: number | null
+          email_recipients: string[]
+          filters: Json | null
+          frequency: string
+          id: string
+          last_run_date: string | null
+          next_run_date: string | null
+          report_format: string
+          report_name: string
+          report_type: string
+          status: string
+          time: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_month?: number | null
+          day_of_week?: number | null
+          email_recipients?: string[]
+          filters?: Json | null
+          frequency: string
+          id?: string
+          last_run_date?: string | null
+          next_run_date?: string | null
+          report_format?: string
+          report_name: string
+          report_type: string
+          status?: string
+          time?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          day_of_month?: number | null
+          day_of_week?: number | null
+          email_recipients?: string[]
+          filters?: Json | null
+          frequency?: string
+          id?: string
+          last_run_date?: string | null
+          next_run_date?: string | null
+          report_format?: string
+          report_name?: string
+          report_type?: string
+          status?: string
+          time?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           actual_hours: number | null
@@ -451,6 +552,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_next_run_date: {
+        Args: {
+          frequency: string
+          day_of_week: number
+          day_of_month: number
+          run_time: string
+          from_date?: string
+        }
+        Returns: string
+      }
       get_current_user_role: {
         Args: Record<PropertyKey, never>
         Returns: string
