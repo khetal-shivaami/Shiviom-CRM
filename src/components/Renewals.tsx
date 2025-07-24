@@ -4,9 +4,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, AlertTriangle, CheckCircle, Clock, XCircle, Phone, Mail } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Calendar, AlertTriangle, CheckCircle, Clock, XCircle, Phone, Mail, Filter, ChevronDown, Users, Download, Send, Trash2, Edit, UserIcon, Eye, X } from 'lucide-react';
 import { Renewal, Customer, Partner, Product, User } from '../types';
 import RenewalEmailDialog from './RenewalEmailDialog';
+import BulkRenewalEmailDialog from './BulkRenewalEmailDialog';
+import CustomerDetailDialog from './CustomerDetailDialog';
 
 interface RenewalsProps {
   renewals: Renewal[];
@@ -17,13 +22,74 @@ interface RenewalsProps {
 }
 
 const Renewals = ({ renewals, customers, partners, products, users = [] }: RenewalsProps) => {
+  // Filter states
   const [statusFilter, setStatusFilter] = useState('all');
+  const [partnerFilter, setPartnerFilter] = useState('all');
+  const [productFilter, setProductFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Selection states
+  const [selectedRenewals, setSelectedRenewals] = useState<string[]>([]);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  
+  // Dialog states
+  const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  const [customerDetailOpen, setCustomerDetailOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
 
   const filteredRenewals = useMemo(() => {
-    return renewals.filter(renewal => 
-      statusFilter === 'all' || renewal.status === statusFilter
-    );
-  }, [renewals, statusFilter]);
+    return renewals.filter(renewal => {
+      // Status filter
+      if (statusFilter !== 'all' && renewal.status !== statusFilter) return false;
+      
+      // Partner filter
+      if (partnerFilter !== 'all' && renewal.partnerId !== partnerFilter) return false;
+      
+      // Product filter
+      if (productFilter !== 'all' && renewal.productId !== productFilter) return false;
+      
+      // Date filter
+      if (dateFilter !== 'all') {
+        const today = new Date();
+        const renewalDate = new Date(renewal.renewalDate);
+        const daysUntil = Math.ceil((renewalDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        switch (dateFilter) {
+          case 'today':
+            if (daysUntil !== 0) return false;
+            break;
+          case 'week':
+            if (daysUntil < 0 || daysUntil > 7) return false;
+            break;
+          case 'month':
+            if (daysUntil < 0 || daysUntil > 30) return false;
+            break;
+          case 'overdue':
+            if (daysUntil >= 0) return false;
+            break;
+        }
+      }
+      
+      // Search filter
+      if (searchTerm) {
+        const customerName = getCustomerName(renewal.customerId).toLowerCase();
+        const partnerName = getPartnerName(renewal.partnerId).toLowerCase();
+        const productName = getProductName(renewal.productId).toLowerCase();
+        const searchLower = searchTerm.toLowerCase();
+        
+        if (!customerName.includes(searchLower) && 
+            !partnerName.includes(searchLower) && 
+            !productName.includes(searchLower)) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  }, [renewals, statusFilter, partnerFilter, productFilter, dateFilter, searchTerm]);
 
   const getCustomerName = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
@@ -90,6 +156,57 @@ const Renewals = ({ renewals, customers, partners, products, users = [] }: Renew
     return diffDays;
   };
 
+  // Selection handlers
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedRenewals(filteredRenewals.map(r => r.id));
+    } else {
+      setSelectedRenewals([]);
+    }
+  };
+
+  const handleSelectRenewal = (renewalId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedRenewals([...selectedRenewals, renewalId]);
+    } else {
+      setSelectedRenewals(selectedRenewals.filter(id => id !== renewalId));
+    }
+  };
+
+  const handleCustomerClick = (customerId: string, partnerId: string) => {
+    const customer = customers.find(c => c.id === customerId);
+    const partner = partners.find(p => p.id === partnerId);
+    setSelectedCustomer(customer || null);
+    setSelectedPartner(partner || null);
+    setCustomerDetailOpen(true);
+  };
+
+  // Bulk actions
+  const selectedRenewalObjects = filteredRenewals.filter(r => selectedRenewals.includes(r.id));
+
+  const handleBulkEmail = () => {
+    setBulkEmailOpen(true);
+  };
+
+  const handleBulkStatusUpdate = (newStatus: string) => {
+    console.log('Updating status for renewals:', selectedRenewals, 'to:', newStatus);
+    // Implement bulk status update logic here
+    setSelectedRenewals([]);
+  };
+
+  const handleExportSelected = () => {
+    console.log('Exporting selected renewals:', selectedRenewals);
+    // Implement export logic here
+  };
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setPartnerFilter('all');
+    setProductFilter('all');
+    setDateFilter('all');
+    setSearchTerm('');
+  };
+
   const totalValue = filteredRenewals.reduce((sum, renewal) => sum + renewal.contractValue, 0);
   const urgentRenewals = renewals.filter(r => r.status === 'due' || r.status === 'overdue').length;
 
@@ -146,27 +263,162 @@ const Renewals = ({ renewals, customers, partners, products, users = [] }: Renew
       {/* Filters and Table */}
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>Renewal Management</CardTitle>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="upcoming">Upcoming</SelectItem>
-                <SelectItem value="due">Due</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
-                <SelectItem value="renewed">Renewed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-col space-y-4">
+            <div className="flex justify-between items-center">
+              <CardTitle>Renewal Management</CardTitle>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Search customers, partners, products..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64"
+                />
+                <Collapsible open={showFilters} onOpenChange={setShowFilters}>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" className="gap-2">
+                      <Filter size={16} />
+                      Filters
+                      <ChevronDown size={16} className={showFilters ? "rotate-180" : ""} />
+                    </Button>
+                  </CollapsibleTrigger>
+                </Collapsible>
+              </div>
+            </div>
+            
+            <Collapsible open={showFilters} onOpenChange={setShowFilters}>
+              <CollapsibleContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 border rounded-lg bg-muted/50">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Status</label>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="upcoming">Upcoming</SelectItem>
+                        <SelectItem value="due">Due</SelectItem>
+                        <SelectItem value="overdue">Overdue</SelectItem>
+                        <SelectItem value="renewed">Renewed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Partner</label>
+                    <Select value={partnerFilter} onValueChange={setPartnerFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Partners" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Partners</SelectItem>
+                        {partners.map((partner) => (
+                          <SelectItem key={partner.id} value={partner.id}>
+                            {partner.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Product</label>
+                    <Select value={productFilter} onValueChange={setProductFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Products" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Products</SelectItem>
+                        {products.map((product) => (
+                          <SelectItem key={product.id} value={product.id}>
+                            {product.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Due Date</label>
+                    <Select value={dateFilter} onValueChange={setDateFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Dates" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Dates</SelectItem>
+                        <SelectItem value="today">Due Today</SelectItem>
+                        <SelectItem value="week">Due This Week</SelectItem>
+                        <SelectItem value="month">Due This Month</SelectItem>
+                        <SelectItem value="overdue">Overdue</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="flex justify-between items-center">
+                  <Button variant="outline" onClick={clearFilters} size="sm">
+                    Clear All Filters
+                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    Showing {filteredRenewals.length} of {renewals.length} renewals
+                  </p>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+            
+            {/* Bulk Actions Bar */}
+            {selectedRenewals.length > 0 && (
+              <div className="flex items-center justify-between p-3 bg-primary/10 border border-primary/20 rounded-lg">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-medium">
+                    {selectedRenewals.length} of {filteredRenewals.length} selected
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={handleBulkEmail} className="gap-1">
+                      <Send size={14} />
+                      Send Emails
+                    </Button>
+                    <Select onValueChange={handleBulkStatusUpdate}>
+                      <SelectTrigger className="w-40 h-8">
+                        <SelectValue placeholder="Update Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="upcoming">Set Upcoming</SelectItem>
+                        <SelectItem value="due">Set Due</SelectItem>
+                        <SelectItem value="renewed">Set Renewed</SelectItem>
+                        <SelectItem value="cancelled">Set Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" variant="outline" onClick={handleExportSelected} className="gap-1">
+                      <Download size={14} />
+                      Export
+                    </Button>
+                  </div>
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => setSelectedRenewals([])}
+                  className="gap-1"
+                >
+                  <X size={14} />
+                  Clear Selection
+                </Button>
+              </div>
+            )}
           </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={selectedRenewals.length === filteredRenewals.length && filteredRenewals.length > 0}
+                    onCheckedChange={handleSelectAll}
+                  />
+                </TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Partner</TableHead>
                 <TableHead>Product</TableHead>
@@ -184,11 +436,24 @@ const Renewals = ({ renewals, customers, partners, products, users = [] }: Renew
                 const customer = getCustomer(renewal.customerId);
                 const partner = getPartner(renewal.partnerId);
                 const assignedEmployee = getFirstAssignedEmployee(renewal.partnerId);
+                const isSelected = selectedRenewals.includes(renewal.id);
                 
                 return (
-                  <TableRow key={renewal.id} className="hover:bg-muted/50">
+                  <TableRow key={renewal.id} className={`hover:bg-muted/50 ${isSelected ? 'bg-muted/30' : ''}`}>
+                    <TableCell>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => handleSelectRenewal(renewal.id, checked as boolean)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">
-                      {getCustomerName(renewal.customerId)}
+                      <Button
+                        variant="link"
+                        className="p-0 h-auto font-medium text-left"
+                        onClick={() => handleCustomerClick(renewal.customerId, renewal.partnerId)}
+                      >
+                        {getCustomerName(renewal.customerId)}
+                      </Button>
                     </TableCell>
                     <TableCell>{getPartnerName(renewal.partnerId)}</TableCell>
                     <TableCell>{getProductName(renewal.productId)}</TableCell>
@@ -238,6 +503,15 @@ const Renewals = ({ renewals, customers, partners, products, users = [] }: Renew
                             </Button>
                           </RenewalEmailDialog>
                         )}
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="gap-1"
+                          onClick={() => handleCustomerClick(renewal.customerId, renewal.partnerId)}
+                        >
+                          <Eye size={14} />
+                          View
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -247,6 +521,25 @@ const Renewals = ({ renewals, customers, partners, products, users = [] }: Renew
           </Table>
         </CardContent>
       </Card>
+
+      {/* Dialogs */}
+      <BulkRenewalEmailDialog
+        renewals={selectedRenewalObjects}
+        customers={customers}
+        partners={partners}
+        users={users}
+        open={bulkEmailOpen}
+        onOpenChange={setBulkEmailOpen}
+      />
+
+      <CustomerDetailDialog
+        customer={selectedCustomer}
+        partner={selectedPartner}
+        products={products}
+        users={users}
+        open={customerDetailOpen}
+        onOpenChange={setCustomerDetailOpen}
+      />
     </div>
   );
 };
