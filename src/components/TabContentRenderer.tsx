@@ -11,7 +11,8 @@ import UserHierarchyTable from '@/components/UserHierarchyTable';
 import Reports from '@/components/Reports';
 import Settings from '@/components/Settings';
 import ImportData from '@/components/ImportData';
-import CustomerManagement from '@/components/CustomerManagement';
+import PartnerProspects from '@/components/PartnerProspects';
+import CustomerView from '@/components/CustomerView';
 import PartnerOnboarding from '@/components/PartnerOnboarding';
 import TaskManagement from '@/components/TaskManagement';
 import { Customer, Partner, Product, User, Renewal, DashboardStats as StatsType } from '@/types';
@@ -149,14 +150,12 @@ const TabContentRenderer = ({
   switch (activeTab) {
     case 'customers':
       return (
-        <CustomerTable
+        <CustomerView
           customers={customers}
           partners={partners}
           products={products}
           users={users}
-          onStatusChange={handleStatusChange}
-          onBulkStatusChange={handleBulkStatusChange}
-          onBulkImport={onCustomerImport}
+          onCustomerUpdate={onCustomerUpdate}
         />
       );
     case 'dashboard':
@@ -196,9 +195,9 @@ const TabContentRenderer = ({
           )}
         </div>
       );
-    case 'customer-management':
+    case 'partner-prospects':
       return (
-        <CustomerManagement 
+        <PartnerProspects 
           customers={customers} 
           partners={partners} 
           products={products}

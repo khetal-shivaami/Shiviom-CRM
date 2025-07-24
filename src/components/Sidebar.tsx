@@ -63,7 +63,7 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
       label: 'CRM', 
       icon: Building,
       subItems: [
-        { id: 'customer-management', label: 'Customer Management', icon: Users },
+        { id: 'partner-prospects', label: 'Partner Prospects', icon: Users },
         { id: 'partner-onboarding', label: 'Partner Onboarding', icon: UserPlus },
       ]
     },
