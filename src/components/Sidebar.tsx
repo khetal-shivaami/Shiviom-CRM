@@ -57,6 +57,7 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'customers', label: 'Customers', icon: Users },
     { 
       id: 'crm', 
       label: 'CRM', 

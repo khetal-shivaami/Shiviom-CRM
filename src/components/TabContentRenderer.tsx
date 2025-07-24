@@ -147,6 +147,18 @@ const TabContentRenderer = ({
   };
 
   switch (activeTab) {
+    case 'customers':
+      return (
+        <CustomerTable
+          customers={customers}
+          partners={partners}
+          products={products}
+          users={users}
+          onStatusChange={handleStatusChange}
+          onBulkStatusChange={handleBulkStatusChange}
+          onBulkImport={onCustomerImport}
+        />
+      );
     case 'dashboard':
       return (
         <div className="space-y-6">
