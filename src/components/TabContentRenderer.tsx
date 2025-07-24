@@ -227,12 +227,10 @@ const TabContentRenderer = ({
             onBulkStatusChange={onProductBulkStatusChange}
             onBulkImport={onProductImport}
             onProductUpdate={onProductUpdate}
-            onAddProduct={() => window.location.hash = '?tab=add-product'}
+            onAddProduct={onProductAdd}
           />
         </div>
       );
-    case 'add-product':
-      return <ProductForm onProductAdd={onProductAdd} />;
     case 'renewals':
       return <Renewals renewals={renewals} customers={customers} partners={partners} products={products} />;
     case 'user-hierarchy':

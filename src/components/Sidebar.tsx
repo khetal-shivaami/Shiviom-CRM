@@ -71,15 +71,7 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
     { id: 'tasks', label: 'Task Management', icon: CheckSquare },
     { id: 'renewals', label: 'Renewals', icon: RefreshCw },
     { id: 'reports', label: 'Reports', icon: FileText },
-    { 
-      id: 'products', 
-      label: 'Products', 
-      icon: Package,
-      subItems: [
-        { id: 'products', label: 'View Products' },
-        ...(isAdmin ? [{ id: 'add-product', label: 'Add Product', icon: Plus }] : []),
-      ]
-    },
+    { id: 'products', label: 'Products', icon: Package },
     ...(isAdmin ? [{
       id: 'settings', 
       label: 'Settings', 

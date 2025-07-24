@@ -2,10 +2,12 @@
 import { useState, useMemo } from 'react';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Product } from '../types';
 import ProductTableHeader from './ProductTableHeader';
 import ProductTableRow from './ProductTableRow';
 import ProductDetail from './ProductDetail';
+import ProductForm from './ProductForm';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface ProductTableProps {
@@ -15,7 +17,7 @@ interface ProductTableProps {
   onBulkStatusChange?: (productIds: string[], newStatus: 'active' | 'inactive') => void;
   onBulkImport?: (products: Product[]) => void;
   onProductUpdate?: (productId: string, updates: Partial<Product>) => void;
-  onAddProduct?: () => void;
+  onAddProduct?: (product: Product) => void;
 }
 
 const ProductTable = ({ products, onPriceUpdate, onStatusChange, onBulkStatusChange, onBulkImport, onProductUpdate, onAddProduct }: ProductTableProps) => {
@@ -23,6 +25,7 @@ const ProductTable = ({ products, onPriceUpdate, onStatusChange, onBulkStatusCha
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
   const { isAdmin, profile } = useAuth();
 
   // Get current user role from auth context
@@ -62,6 +65,19 @@ const ProductTable = ({ products, onPriceUpdate, onStatusChange, onBulkStatusCha
     onProductUpdate?.(productId, updatedProduct);
   };
 
+  const handleAddProduct = (product: Product) => {
+    onAddProduct?.(product);
+    setShowAddForm(false);
+  };
+
+  const handleShowAddForm = () => {
+    setShowAddForm(true);
+  };
+
+  const handleCancelAdd = () => {
+    setShowAddForm(false);
+  };
+
   // Dummy handlers for removed bulk functionality
   const handleSelect = (productId: string) => {
     // No longer used since bulk actions are removed
@@ -69,6 +85,20 @@ const ProductTable = ({ products, onPriceUpdate, onStatusChange, onBulkStatusCha
 
   if (selectedProduct) {
     return <ProductDetail product={selectedProduct} onBack={handleBackToList} onProductUpdate={handleProductUpdate} />;
+  }
+
+  if (showAddForm) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-semibold">Add New Product</h2>
+          <Button variant="outline" onClick={handleCancelAdd}>
+            Back to Products
+          </Button>
+        </div>
+        <ProductForm onProductAdd={handleAddProduct} />
+      </div>
+    );
   }
 
   return (
@@ -85,7 +115,7 @@ const ProductTable = ({ products, onPriceUpdate, onStatusChange, onBulkStatusCha
           onStatusFilter={setStatusFilter}
           onCategoryFilter={setCategoryFilter}
           onBulkImport={onBulkImport}
-          onAddProduct={onAddProduct}
+          onAddProduct={handleShowAddForm}
         />
         <CardContent>
           <Table>
