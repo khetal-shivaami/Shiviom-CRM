@@ -145,37 +145,58 @@ class ReportService {
   private processDataForReport(config: ReportConfig, data: ReportData): any[] {
     let sourceData: any[] = [];
     
-    switch (config.type) {
-      case 'customers':
-      case 'customer-summary':
-        sourceData = this.processCustomerData(data.customers || [], config);
-        break;
-      case 'partners':
-      case 'partner-performance':
-        sourceData = this.processPartnerData(data.partners || [], config);
-        break;
-      case 'products':
-      case 'product-adoption':
-        sourceData = this.processProductData(data.products || [], config);
-        break;
-      case 'tasks':
-      case 'task-performance':
-        sourceData = this.processTaskData(data.tasks || [], config);
-        break;
-      case 'users':
-        sourceData = this.processUserData(data.users || [], config);
-        break;
-      case 'productivity':
-        sourceData = this.processProductivityData(data.tasks || [], config);
-        break;
-      case 'business-intelligence':
-        sourceData = this.processBusinessIntelligenceData(data, config);
-        break;
-      case 'combined':
-        sourceData = this.processCombinedData(data, config);
-        break;
-      default:
-        sourceData = this.processGenericData(data, config);
+    try {
+      switch (config.type) {
+        case 'customers':
+        case 'customer-summary':
+        case 'customer-engagement':
+          sourceData = this.processCustomerData(data.customers || [], config);
+          break;
+        case 'partners':
+        case 'partner-performance':
+        case 'partner-onboarding':
+          sourceData = this.processPartnerData(data.partners || [], config);
+          break;
+        case 'products':
+        case 'product-adoption':
+        case 'product-performance':
+          sourceData = this.processProductData(data.products || [], config);
+          break;
+        case 'tasks':
+        case 'task-performance':
+        case 'operational-reports':
+          sourceData = this.processTaskData(data.tasks || [], config);
+          break;
+        case 'users':
+        case 'user-activity':
+          sourceData = this.processUserData(data.users || [], config);
+          break;
+        case 'productivity':
+        case 'employee-productivity':
+          sourceData = this.processProductivityData(data.tasks || [], config);
+          break;
+        case 'business-intelligence':
+        case 'revenue-analysis':
+          sourceData = this.processBusinessIntelligenceData(data, config);
+          break;
+        case 'combined':
+        case 'executive-summary':
+          sourceData = this.processCombinedData(data, config);
+          break;
+        default:
+          console.warn(`Unknown report type: ${config.type}, using generic processing`);
+          sourceData = this.processGenericData(data, config);
+      }
+      
+      console.log(`Processed ${sourceData.length} records for report type: ${config.type}`);
+      
+      if (sourceData.length === 0) {
+        console.warn(`No data found for report type: ${config.type}`);
+      }
+      
+    } catch (error) {
+      console.error(`Error processing data for report type ${config.type}:`, error);
+      sourceData = [];
     }
     
     return this.applyFilters(sourceData, config.filters || {});
