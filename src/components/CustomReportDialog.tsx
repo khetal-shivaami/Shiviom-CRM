@@ -8,6 +8,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar, FileText, Download, Clock, Target, Users, BarChart } from 'lucide-react';
 import { Customer, Partner, Product, User, Task } from '../types';
+import { reportService } from '@/services/reportService';
+import { useToast } from '@/hooks/use-toast';
 
 interface CustomReportDialogProps {
   open: boolean;
@@ -24,6 +26,9 @@ const CustomReportDialog = ({ open, onOpenChange, customers, partners, products,
   const [dateRange, setDateRange] = useState('last-30-days');
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [format, setFormat] = useState<'csv' | 'excel' | 'pdf'>('excel');
+  const { toast } = useToast();
 
   const reportTypes = [
     { value: 'tasks', label: 'Task Performance Report', icon: Clock },
@@ -76,21 +81,48 @@ const CustomReportDialog = ({ open, onOpenChange, customers, partners, products,
     );
   };
 
-  const handleGenerateReport = () => {
-    console.log('Generating custom report:', {
-      type: reportType,
-      dateRange,
-      fields: selectedFields,
-      filters,
-    });
+  const handleGenerateReport = async () => {
+    setIsGenerating(true);
     
-    // In a real app, this would generate the actual report
-    onOpenChange(false);
-    
-    // Reset form
-    setReportType('');
-    setSelectedFields([]);
-    setFilters({});
+    try {
+      await reportService.generateReport(
+        {
+          type: reportType,
+          format,
+          dateRange,
+          fields: selectedFields,
+          filters
+        },
+        {
+          customers,
+          partners,
+          products,
+          users,
+          tasks
+        }
+      );
+      
+      toast({
+        title: "Custom Report Generated",
+        description: `Your ${format.toUpperCase()} report has been generated and downloaded successfully.`,
+      });
+      
+      onOpenChange(false);
+      
+      // Reset form
+      setReportType('');
+      setSelectedFields([]);
+      setFilters({});
+      setFormat('excel');
+    } catch (error) {
+      toast({
+        title: "Generation Failed",
+        description: "There was an error generating your custom report. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const availableFields = getAvailableFields(reportType);
@@ -142,6 +174,21 @@ const CustomReportDialog = ({ open, onOpenChange, customers, partners, products,
                     {option.label}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Format Selection */}
+          <div className="space-y-2">
+            <Label>Report Format</Label>
+            <Select value={format} onValueChange={(value) => setFormat(value as 'csv' | 'excel' | 'pdf')}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="excel">Excel (.xlsx)</SelectItem>
+                <SelectItem value="csv">CSV (.csv)</SelectItem>
+                <SelectItem value="pdf">PDF (.pdf)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -362,11 +409,11 @@ const CustomReportDialog = ({ open, onOpenChange, customers, partners, products,
             </Button>
             <Button 
               onClick={handleGenerateReport}
-              disabled={!reportType || selectedFields.length === 0}
+              disabled={!reportType || selectedFields.length === 0 || isGenerating}
               className="gap-2"
             >
               <Download size={16} />
-              Generate Report
+              {isGenerating ? 'Generating...' : `Generate ${format.toUpperCase()} Report`}
             </Button>
           </div>
         </div>

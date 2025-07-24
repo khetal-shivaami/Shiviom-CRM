@@ -8,6 +8,8 @@ import { Customer, Partner, Product, User, Task } from '../types';
 import CustomReportDialog from './CustomReportDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { mockTasks } from '@/utils/mockTasks';
+import { reportService } from '@/services/reportService';
+import { useToast } from '@/hooks/use-toast';
 
 interface ReportsProps {
   customers: Customer[];
@@ -18,7 +20,9 @@ interface ReportsProps {
 
 const Reports = ({ customers, partners, products, users }: ReportsProps) => {
   const [isCustomReportOpen, setIsCustomReportOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const { user, profile } = useAuth();
+  const { toast } = useToast();
   
   // Filter data based on user role and assignments
   const { filteredCustomers, filteredPartners, filteredTasks } = useMemo(() => {
@@ -246,14 +250,72 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
     return colors[category as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
-  const handleDownloadReport = (reportId: string) => {
-    console.log(`Downloading report: ${reportId}`);
-    // In a real app, this would generate and download the actual report
+  const handleDownloadReport = async (reportId: string) => {
+    setIsGenerating(reportId);
+    
+    try {
+      await reportService.generateReport(
+        {
+          type: reportId,
+          format: 'excel',
+          dateRange: 'last-30-days'
+        },
+        {
+          customers: filteredCustomers,
+          partners: filteredPartners,
+          products,
+          users,
+          tasks: filteredTasks
+        }
+      );
+      
+      toast({
+        title: "Report Downloaded",
+        description: "Your report has been generated and downloaded successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "There was an error generating your report. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(null);
+    }
   };
 
-  const handleGenerateReport = (reportId: string) => {
-    console.log(`Generating report: ${reportId}`);
-    // In a real app, this would trigger report generation
+  const handleGenerateReport = async (reportId: string) => {
+    setIsGenerating(reportId);
+    
+    try {
+      await reportService.generateReport(
+        {
+          type: reportId,
+          format: 'pdf',
+          dateRange: 'last-30-days'
+        },
+        {
+          customers: filteredCustomers,
+          partners: filteredPartners,
+          products,
+          users,
+          tasks: filteredTasks
+        }
+      );
+      
+      toast({
+        title: "Report Generated",
+        description: "Your report has been generated and downloaded successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Generation Failed",
+        description: "There was an error generating your report. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(null);
+    }
   };
 
   return (
@@ -414,18 +476,20 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
                     variant="outline"
                     size="sm"
                     onClick={() => handleGenerateReport(report.id)}
+                    disabled={isGenerating === report.id}
                     className="flex-1 sm:flex-none text-xs"
                   >
-                    Generate
+                    {isGenerating === report.id ? 'Generating...' : 'Generate PDF'}
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleDownloadReport(report.id)}
+                    disabled={isGenerating === report.id}
                     className="gap-1 flex-1 sm:flex-none text-xs"
                   >
                     <Download size={12} />
-                    Download
+                    {isGenerating === report.id ? 'Downloading...' : 'Download Excel'}
                   </Button>
                 </div>
               </div>
