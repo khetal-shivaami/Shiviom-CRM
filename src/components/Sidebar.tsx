@@ -57,6 +57,7 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'partners', label: 'Partners', icon: Tag },
     { id: 'customers', label: 'Customers', icon: Users },
     { 
       id: 'crm', 
@@ -67,7 +68,9 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
         { id: 'partner-onboarding', label: 'Partner Onboarding', icon: UserPlus },
       ]
     },
-    { id: 'partners', label: 'Partners', icon: Tag },
+    { id: 'tasks', label: 'Task Management', icon: CheckSquare },
+    { id: 'renewals', label: 'Renewals', icon: RefreshCw },
+    { id: 'reports', label: 'Reports', icon: FileText },
     { 
       id: 'products', 
       label: 'Products', 
@@ -77,9 +80,6 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
         ...(isAdmin ? [{ id: 'add-product', label: 'Add Product', icon: Plus }] : []),
       ]
     },
-    { id: 'tasks', label: 'Task Management', icon: CheckSquare },
-    { id: 'renewals', label: 'Renewals', icon: RefreshCw },
-    { id: 'reports', label: 'Reports', icon: FileText },
     ...(isAdmin ? [{
       id: 'settings', 
       label: 'Settings', 
