@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { FileText, Download, Plus, Calendar, Filter, BarChart3, Users, Tag, Package, Clock, CheckCircle, AlertTriangle, TrendingUp } from 'lucide-react';
 import { Customer, Partner, Product, User, Task } from '../types';
 import CustomReportDialog from './CustomReportDialog';
+import ScheduleReportDialog from './ScheduleReportDialog';
+import ScheduledReportsManager from './ScheduledReportsManager';
 import { useAuth } from '@/contexts/AuthContext';
 import { mockTasks } from '@/utils/mockTasks';
 import { reportService } from '@/services/reportService';
@@ -491,12 +493,28 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
                     <Download size={12} />
                     {isGenerating === report.id ? 'Downloading...' : 'Download Excel'}
                   </Button>
+                  <ScheduleReportDialog
+                    reportType={report.id}
+                    reportName={report.title}
+                  >
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 flex-1 sm:flex-none text-xs"
+                    >
+                      <Calendar size={12} />
+                      Schedule
+                    </Button>
+                  </ScheduleReportDialog>
                 </div>
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
+
+      {/* Scheduled Reports Manager */}
+      <ScheduledReportsManager />
 
       {/* Custom Report Dialog */}
       <CustomReportDialog
