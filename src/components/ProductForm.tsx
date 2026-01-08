@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,14 +6,17 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Product } from '../types';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ProductFormProps {
-  onProductAdd: (product: Product) => void;
+  onSuccess: () => void;
 }
 
-const ProductForm = ({ onProductAdd }: ProductFormProps) => {
+const ProductForm = ({ onSuccess }: ProductFormProps) => {
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
     website: '',
@@ -22,17 +24,42 @@ const ProductForm = ({ onProductAdd }: ProductFormProps) => {
     description: '',
   });
 
-  const categories = [
-    'Identity Management',
-    'Mobile Device Management', 
-    'Productivity Suite',
-    'Communication',
-    'Security'
-  ];
+  useEffect(() => {
+    const fetchCategories = async () => {
+      setIsLoadingCategories(true);
+      try {
+        const { data, error } = await supabase
+          .from('products_category')
+          .select('category_name')
+          .order('category_name', { ascending: true });
 
-  const handleSubmit = (e: React.FormEvent) => {
+        if (error) {
+          throw error;
+        }
+
+        if (data) {
+          const categoryNames = data
+            .map(item => item.category_name)
+            .filter((name): name is string => !!name);
+          setCategories(categoryNames);
+        }
+      } catch (error: any) {
+        toast({
+          title: "Error fetching categories",
+          description: error.message,
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    };
+
+    fetchCategories();
+  }, [toast]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.name || !formData.website || !formData.category || !formData.description) {
       toast({
         title: "Error",
@@ -42,31 +69,31 @@ const ProductForm = ({ onProductAdd }: ProductFormProps) => {
       return;
     }
 
-    const newProduct: Product = {
-      id: Date.now().toString(),
-      name: formData.name,
-      website: formData.website,
-      category: formData.category,
-      description: formData.description,
-      status: 'active',
-      customersCount: 0,
-      plans: [], // Start with empty plans array
-      createdAt: new Date(),
-    };
+    setIsSubmitting(true);
 
-    onProductAdd(newProduct);
-    
-    setFormData({
-      name: '',
-      website: '',
-      category: '',
-      description: '',
-    });
+    try {
+      const productToInsert = {
+        name: formData.name,
+        website: formData.website,
+        category: formData.category,
+        description: formData.description,
+        status: 'active',
+        plans: [],
+      };
 
-    toast({
-      title: "Success",
-      description: "Product added successfully! You can add plans later by clicking 'Manage Plans'.",
-    });
+      const { error } = await supabase.from('products').insert([productToInsert]);
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Product added successfully!",
+      });
+      onSuccess();
+    } catch (error: any) {
+      toast({ title: "Error adding product", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -102,9 +129,9 @@ const ProductForm = ({ onProductAdd }: ProductFormProps) => {
 
           <div className="space-y-2">
             <Label htmlFor="category">Category *</Label>
-            <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+            <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })} disabled={isLoadingCategories}>
               <SelectTrigger>
-                <SelectValue placeholder="Select a category" />
+                <SelectValue placeholder={isLoadingCategories ? "Loading categories..." : "Select a category"} />
               </SelectTrigger>
               <SelectContent>
                 {categories.map((category) => (
@@ -134,8 +161,8 @@ const ProductForm = ({ onProductAdd }: ProductFormProps) => {
             </p>
           </div>
 
-          <Button type="submit" className="w-full">
-            Add Product
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? 'Adding Product...' : 'Add Product'}
           </Button>
         </form>
       </CardContent>

@@ -1,31 +1,137 @@
-
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Download, Plus, Calendar, Filter, BarChart3, Users, Tag, Package, Clock, CheckCircle, AlertTriangle, TrendingUp } from 'lucide-react';
-import { Customer, Partner, Product, User, Task } from '../types';
+import { Customer, Partner, Product, User, Task } from '@/types';
 import CustomReportDialog from './CustomReportDialog';
 import ScheduleReportDialog from './ScheduleReportDialog';
 import ScheduledReportsManager from './ScheduledReportsManager';
 import { useAuth } from '@/contexts/AuthContext';
-import { mockTasks } from '@/utils/mockTasks';
+import { useTaskManager } from '@/hooks/useTaskManager';
+import { supabase } from '@/integrations/supabase/client';
+import { API_ENDPOINTS } from '@/config/api';
 import { reportService } from '@/services/reportService';
 import { useToast } from '@/hooks/use-toast';
 
+interface CustomReportConfig {
+  reportName: string;
+  selectedCustomers: Customer[];
+  selectedPartners: Partner[];
+  selectedProducts: Product[];
+  selectedUsers: User[];
+  selectedTasks: Task[];
+  dateRange?: { from: Date; to: Date } | string;
+}
+
 interface ReportsProps {
-  customers: Customer[];
-  partners: Partner[];
-  products: Product[];
   users: User[];
 }
 
-const Reports = ({ customers, partners, products, users }: ReportsProps) => {
+const Reports = ({ users }: ReportsProps) => {
   const [isCustomReportOpen, setIsCustomReportOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const { user, profile } = useAuth();
+  const { tasks, loading: tasksLoading } = useTaskManager();
   const { toast } = useToast();
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [overdueTasksCount, setOverdueTasksCount] = useState(0);
+  const [highPriorityTasksCount, setHighPriorityTasksCount] = useState(0);
   
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Fetch Customers from API
+        const customerResponse = await fetch(API_ENDPOINTS.GET_RESELLER_CUSTOEMRS_LIST_ONCRM, {
+          method: 'POST',
+        });
+        if (!customerResponse.ok) throw new Error('Failed to fetch customers');
+        const customerResult = await customerResponse.json();
+        if (customerResult.success && customerResult.data?.data_result) {
+          setCustomers(customerResult.data.data_result);
+        }
+
+        // Fetch Partners from Supabase in chunks
+        const CHUNK_SIZE = 1000; // Supabase default limit
+        let allPartners: Partner[] = [];
+        let from = 0;
+        let hasMore = true;
+
+        while(hasMore) {
+          const { data: partnersChunk, error: partnersError } = await supabase
+            .from('partners')
+            .select('*')
+            .range(from, from + CHUNK_SIZE - 1);
+
+          if (partnersError) throw partnersError;
+
+          if (partnersChunk && partnersChunk.length > 0) {
+            allPartners = [...allPartners, ...partnersChunk];
+            from += partnersChunk.length;
+          }
+
+          if (!partnersChunk || partnersChunk.length < CHUNK_SIZE) {
+            hasMore = false;
+          }
+        }
+        setPartners(allPartners);
+
+        // Fetch Products from Supabase
+        const { data: productsData, error: productsError } = await supabase
+          .from('products')
+          .select('*');
+        if (productsError) throw productsError;
+        setProducts(productsData || []);
+
+        // Fetch task analytics from Supabase
+        if (user?.id) {
+          const baseQuery = supabase.from('tasks');
+          let overdueQuery = baseQuery
+            .select('*', { count: 'exact', head: true })
+            .lt('dueDate', new Date().toISOString())
+            .neq('status', 'completed');
+
+          let highPriorityQuery = baseQuery
+            .select('*', { count: 'exact', head: true })
+            .in('priority', ['high', 'urgent']);
+
+          // Apply user filtering for non-admin roles
+          if (profile?.role !== 'admin') {
+            const userFilter = `or(assignedTo.eq.${user.id},assignedBy.eq.${user.id})`;
+            overdueQuery = overdueQuery.filter(userFilter);
+            highPriorityQuery = highPriorityQuery.filter(userFilter);
+          }
+
+          const [overdueResult, highPriorityResult] = await Promise.all([
+            overdueQuery,
+            highPriorityQuery
+          ]);
+
+          if (overdueResult.error) throw overdueResult.error;
+          if (highPriorityResult.error) throw highPriorityResult.error;
+
+          setOverdueTasksCount(overdueResult.count || 0);
+          setHighPriorityTasksCount(highPriorityResult.count || 0);
+        }
+
+      } catch (error: any) {
+        toast({
+          title: "Error fetching data",
+          description: error.message || "Could not load necessary report data.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [toast, user?.id, profile?.role]);
   // Filter data based on user role and assignments
   const { filteredCustomers, filteredPartners, filteredTasks } = useMemo(() => {
     // Admin users see all data
@@ -33,7 +139,7 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
       return {
         filteredCustomers: customers,
         filteredPartners: partners,
-        filteredTasks: mockTasks
+        filteredTasks: tasks
       };
     }
     
@@ -46,7 +152,7 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
       partner.assignedUserIds?.includes(user?.id || '')
     );
 
-    const userAssignedTasks = mockTasks.filter(task => 
+    const userAssignedTasks = tasks.filter(task => 
       task.assignedTo === user?.id || task.assignedBy === user?.id
     );
     
@@ -55,28 +161,22 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
       filteredPartners: userAssignedPartners,
       filteredTasks: userAssignedTasks
     };
-  }, [customers, partners, user?.id, profile?.role]);
+  }, [customers, partners, user?.id, profile?.role, tasks]);
 
   // Task analytics
   const taskAnalytics = useMemo(() => {
     const totalTasks = filteredTasks.length;
     const completedTasks = filteredTasks.filter(t => t.status === 'completed').length;
-    const overdueTasks = filteredTasks.filter(t => 
-      t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'completed'
-    ).length;
-    const highPriorityTasks = filteredTasks.filter(t => 
-      t.priority === 'high' || t.priority === 'urgent'
-    ).length;
     const avgCompletionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
     
     return {
       totalTasks,
       completedTasks,
-      overdueTasks,
-      highPriorityTasks,
+      overdueTasks: overdueTasksCount,
+      highPriorityTasks: highPriorityTasksCount,
       avgCompletionRate
     };
-  }, [filteredTasks]);
+  }, [filteredTasks, overdueTasksCount, highPriorityTasksCount]);
 
   // Filter reports based on user role
   const availableReports = useMemo(() => {
@@ -290,7 +390,8 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
     setIsGenerating(reportId);
     
     try {
-      await reportService.generateReport(
+      // This now expects reportService to return the jsPDF document object
+      const doc = await reportService.generateReport(
         {
           type: reportId,
           format: 'pdf',
@@ -305,15 +406,55 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
         }
       );
       
+      // The component now handles the output, opening the PDF in a new tab.
+      doc.output('dataurlnewwindow');
+      
       toast({
         title: "Report Generated",
-        description: "Your report has been generated and downloaded successfully.",
+        description: "Your report is opening in a new tab.",
       });
     } catch (error) {
       toast({
         title: "Generation Failed",
         description: "There was an error generating your report. Please try again.",
         variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(null);
+    }
+  };
+
+  const handleGenerateCustomReport = async (config: CustomReportConfig) => {
+    setIsGenerating('custom-report');
+    try {
+      // The reportService will handle the actual file generation and download
+      await reportService.generateReport(
+        {
+          type: 'custom',
+          name: config.reportName,
+          format: 'excel',
+          dateRange: config.dateRange || 'all-time',
+        },
+        {
+          customers: config.selectedCustomers,
+          partners: config.selectedPartners,
+          products: config.selectedProducts,
+          users: config.selectedUsers,
+          tasks: config.selectedTasks,
+        }
+      );
+
+      toast({
+        title: 'Custom Report Downloaded',
+        description: 'Your report has been generated and downloaded successfully.',
+      });
+      setIsCustomReportOpen(false); // Close dialog on success
+    } catch (error) {
+      console.error('Failed to generate custom report:', error);
+      toast({
+        title: 'Download Failed',
+        description: 'There was an error generating your custom report. Please try again.',
+        variant: 'destructive',
       });
     } finally {
       setIsGenerating(null);
@@ -336,72 +477,90 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
 
       {/* Enhanced Quick Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 md:gap-4">
-        <Card>
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center gap-2">
-              <Users size={16} className="text-blue-600 md:w-5 md:h-5" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs md:text-sm text-muted-foreground truncate">Customers</p>
-                <p className="text-lg md:text-2xl font-bold">{filteredCustomers.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center gap-2">
-              <Tag size={16} className="text-green-600 md:w-5 md:h-5" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs md:text-sm text-muted-foreground truncate">Partners</p>
-                <p className="text-lg md:text-2xl font-bold">{filteredPartners.filter(p => p.status === 'active').length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center gap-2">
-              <Package size={16} className="text-purple-600 md:w-5 md:h-5" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs md:text-sm text-muted-foreground truncate">Products</p>
-                <p className="text-lg md:text-2xl font-bold">{products.filter(p => p.status === 'active').length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center gap-2">
-              <Clock size={16} className="text-amber-600 md:w-5 md:h-5" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs md:text-sm text-muted-foreground truncate">Total Tasks</p>
-                <p className="text-lg md:text-2xl font-bold">{taskAnalytics.totalTasks}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle size={16} className="text-emerald-600 md:w-5 md:h-5" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs md:text-sm text-muted-foreground truncate">Completed</p>
-                <p className="text-lg md:text-2xl font-bold">{taskAnalytics.completedTasks}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3 md:p-4">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={16} className="text-red-600 md:w-5 md:h-5" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs md:text-sm text-muted-foreground truncate">Overdue</p>
-                <p className="text-lg md:text-2xl font-bold">{taskAnalytics.overdueTasks}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {loading ? (
+          Array.from({ length: 6 }).map((_, index) => (
+            <Card key={index}>
+              <CardContent className="p-3 md:p-4">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-5 w-5" />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-7 w-8" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          <>
+            <Card>
+              <CardContent className="p-3 md:p-4">
+                <div className="flex items-center gap-2">
+                  <Users size={16} className="text-blue-600 md:w-5 md:h-5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm text-muted-foreground truncate">Customers</p>
+                    <p className="text-lg md:text-2xl font-bold">{filteredCustomers.length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 md:p-4">
+                <div className="flex items-center gap-2">
+                  <Tag size={16} className="text-green-600 md:w-5 md:h-5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm text-muted-foreground truncate">Partners</p>
+                    <p className="text-lg md:text-2xl font-bold">{filteredPartners.filter(p => p.status === 'active').length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 md:p-4">
+                <div className="flex items-center gap-2">
+                  <Package size={16} className="text-purple-600 md:w-5 md:h-5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm text-muted-foreground truncate">Products</p>
+                    <p className="text-lg md:text-2xl font-bold">{products.filter(p => p.status === 'active').length}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 md:p-4">
+                <div className="flex items-center gap-2">
+                  <Clock size={16} className="text-amber-600 md:w-5 md:h-5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm text-muted-foreground truncate">Total Tasks</p>
+                    <p className="text-lg md:text-2xl font-bold">{taskAnalytics.totalTasks}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 md:p-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={16} className="text-emerald-600 md:w-5 md:h-5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm text-muted-foreground truncate">Completed</p>
+                    <p className="text-lg md:text-2xl font-bold">{taskAnalytics.completedTasks}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 md:p-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-red-600 md:w-5 md:h-5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs md:text-sm text-muted-foreground truncate">Overdue</p>
+                    <p className="text-lg md:text-2xl font-bold">{taskAnalytics.overdueTasks}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       {/* Performance Metrics */}
@@ -468,13 +627,13 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
                     </div>
                   </div>
                   <p className="text-xs md:text-sm text-muted-foreground mb-2 line-clamp-2">{report.description}</p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {/* <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Calendar size={12} />
                     Last generated: {report.lastGenerated.toLocaleDateString()}
-                  </div>
+                  </div> */}
                 </div>
                 <div className="flex gap-2 sm:flex-col lg:flex-row">
-                  <Button
+                  {/* <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleGenerateReport(report.id)}
@@ -482,7 +641,7 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
                     className="flex-1 sm:flex-none text-xs"
                   >
                     {isGenerating === report.id ? 'Generating...' : 'Generate PDF'}
-                  </Button>
+                  </Button> */}
                   <Button
                     variant="outline"
                     size="sm"
@@ -525,6 +684,8 @@ const Reports = ({ customers, partners, products, users }: ReportsProps) => {
         products={products}
         users={users}
         tasks={filteredTasks}
+        onGenerate={handleGenerateCustomReport}
+        isGenerating={isGenerating === 'custom-report'}
       />
     </div>
   );

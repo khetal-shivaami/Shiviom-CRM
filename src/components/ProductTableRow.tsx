@@ -1,9 +1,15 @@
 
 import { TableCell, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import ProductPlansCell from './ProductPlansCell';
+import { BookOpen } from 'lucide-react';
 import { Product } from '../types';
+import { cn } from '@/lib/utils';
 
 interface ProductTableRowProps {
   product: Product;
@@ -12,10 +18,11 @@ interface ProductTableRowProps {
   onSelect: (productId: string) => void;
   onStatusToggle: (productId: string, currentStatus: string) => void;
   onProductClick: (product: Product) => void;
+  onKnowledgeHubClick: (product: Product) => void;
   onProductUpdate?: (productId: string, updates: Partial<Product>) => void;
 }
 
-const ProductTableRow = ({ product, currentUserRole, isSelected, onSelect, onStatusToggle, onProductClick, onProductUpdate }: ProductTableRowProps) => {
+const ProductTableRow = ({ product, currentUserRole, isSelected, onSelect, onStatusToggle, onProductClick, onKnowledgeHubClick, onProductUpdate }: ProductTableRowProps) => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-800';
@@ -66,26 +73,32 @@ const ProductTableRow = ({ product, currentUserRole, isSelected, onSelect, onSta
         </div>
       </TableCell>
       <TableCell>
-        {plans.length > 0 ? (
-          <div className="space-y-1">
-            {plans.slice(0, 2).map((plan) => (
-              <div key={plan.id} className="flex items-center gap-2 text-sm">
-                <span className="font-medium">{plan.name}:</span>
-                <span>₹{plan.price.toFixed(2)} per user</span>
-                <Badge className={getBillingBadgeColor(plan.billing)} variant="secondary">
-                  {plan.billing}
-                </Badge>
-                {plan.isPopular && (
-                  <Badge variant="default" className="text-xs">Popular</Badge>
-                )}
+        {plans.length > 1 ? (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="link" className="p-0 h-auto text-left" onClick={(e) => e.stopPropagation()}>
+                {plans.length} plans available
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent 
+              className="w-80" 
+              onClick={(e) => e.stopPropagation()}
+              side="top"
+              align="start"
+            >
+              <div className="space-y-2">
+                <h4 className="font-medium leading-none">Available Plans</h4>
+                <p className="text-sm text-muted-foreground">
+                  All pricing plans for {product.name}.
+                </p>
               </div>
-            ))}
-            {plans.length > 2 && (
-              <div className="text-sm text-muted-foreground">
-                +{plans.length - 2} more plans
-              </div>
-            )}
-          </div>
+              <ScrollArea className={cn("mt-4 max-h-72", plans.length > 3 && "h-72")}>
+                <div className="pr-4">
+                  <ProductPlansCell plans={plans} />
+                </div>
+              </ScrollArea>
+            </PopoverContent>
+          </Popover>
         ) : (
           <span className="text-muted-foreground text-sm">No plans available</span>
         )}
@@ -130,6 +143,15 @@ const ProductTableRow = ({ product, currentUserRole, isSelected, onSelect, onSta
           />
         </TableCell>
       )}
+      {/* This cell was added previously and is correct. */}
+      <TableCell onClick={(e) => e.stopPropagation()}>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => onKnowledgeHubClick(product)}>
+          <BookOpen className="h-5 w-5 text-muted-foreground" />
+        </Button>
+      </TableCell>
     </TableRow>
   );
 };

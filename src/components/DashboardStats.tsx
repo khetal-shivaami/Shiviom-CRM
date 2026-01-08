@@ -4,6 +4,7 @@ import { Users, Tag, DollarSign, TrendingUp } from 'lucide-react';
 import { DashboardStats as StatsType } from '../types';
 import DashboardMetricsGrid from './DashboardMetricsGrid';
 
+
 interface DashboardStatsProps {
   stats?: StatsType;
 }
@@ -59,7 +60,7 @@ const DashboardStats = ({ stats }: DashboardStatsProps) => {
   return (
     <div className="space-y-6">
       {/* Main KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
@@ -76,7 +77,7 @@ const DashboardStats = ({ stats }: DashboardStatsProps) => {
             </Card>
           );
         })}
-      </div>
+      </div> */}
 
       {/* Enhanced Metrics Grid */}
       <DashboardMetricsGrid stats={stats} />

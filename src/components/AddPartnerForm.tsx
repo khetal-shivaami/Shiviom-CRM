@@ -1,36 +1,125 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
+import { supabase } from '@/integrations/supabase/client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Partner, User } from '@/types';
+import { useToast } from '@/hooks/use-toast';
 import UserAssignmentSelect from './UserAssignmentSelect';
+import { useAuth } from '@/contexts/AuthContext';
+import { API_ENDPOINTS } from '@/config/api';
+import { Checkbox } from './ui/checkbox';
+
+const identityOptions = [
+  { id: 'web-app-developer', label: 'Web App Developer' },
+  { id: 'system-integrator', label: 'System Integrator' },
+  { id: 'managed-service-provider', label: 'Managed Service Provider' },
+  { id: 'digital-marketer', label: 'Digital Marketer' },
+  { id: 'cyber-security', label: 'Cyber Security' },
+  { id: 'cloud-hosting', label: 'Cloud Hosting' },
+  { id: 'web-hosting', label: 'Web Hosting' },
+  { id: 'hardware', label: 'Hardware' },
+  { id: 'cloud-service-provider', label: 'Cloud Service Provider' },
+  { id: 'microsoft-partner', label: 'Microsoft Partner' },
+  { id: 'aws-partner', label: 'AWS Partner' },
+  { id: 'it-consulting', label: 'IT Consulting' },
+  { id: 'freelance', label: 'Freelance' },
+  { id: 'software-reseller', label: 'Software Reseller' },
+  { id: 'marketing', label: 'Marketing' },
+  { id: 'other', label: 'Other' },
+] as const;
+
+const zoneOptions = [
+  { id: 'north', label: 'North' },
+  { id: 'east', label: 'East' },
+  { id: 'west', label: 'West' },
+  { id: 'south', label: 'South' },
+] as const;
+
+const partnerTagOptions = [
+  { id: 'asirt', label: 'ASIRT' },
+  { id: 'isoda', label: 'ISODA' },
+  { id: 'iamcp', label: 'IAMCP' },
+  { id: 'bni', label: 'BNI' },
+  { id: 'microsoft-direct-reseller', label: 'Microsoft Direct reseller' },
+  { id: 'google-direct-reseller', label: 'Google Direct reseller' },
+  { id: 'demanding', label: 'Demanding' },
+  { id: 'badwords', label: 'Badwords' },
+  { id: 'smb', label: 'SMB' },
+  { id: 'mid-market', label: 'Mid-market' },
+  { id: 'enterprise', label: 'Enterprise' },
+  { id: 'gov-business', label: 'GOV Business' },
+  { id: 'office-in-usa', label: 'Office in USA' },
+  { id: 'office-in-europe', label: 'Office in Europe' },
+  { id: 'office-in-aus', label: 'Office in AUS' },
+  { id: 'office-in-south-asia', label: 'Office in South Asia' },
+  { id: 'office-in-africa', label: 'Office in Africa' },
+  { id: 'office-in-dubai', label: 'Office in Dubai' },
+] as const;
+
+const sourceOfPartnerOptions = [
+  { value: 'webinar', label: 'Webinar' },
+  { value: 'event', label: 'Event' },
+  { value: 'referral', label: 'Referral' },
+  { value: 'inbound', label: 'Inbound' },
+  { value: 'outbound', label: 'Outbound' },
+  { value: 'whatsapp-campaign', label: 'Whatsapp Campaign' },
+  { value: 'email-campaign', label: 'Email Campaign' },
+  { value: 'shivaami', label: 'Shivaami' },
+  { value: 'axima', label: 'Axima' },
+  { value: 'management', label: 'Management' },
+] as const;
 
 const partnerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email'),
   company: z.string().min(2, 'Company name must be at least 2 characters'),
-  specialization: z.string().min(2, 'Specialization is required'),
-  identity: z.enum(['web-app-developer', 'system-integrator', 'managed-service-provider', 'digital-marketer', 'cyber-security', 'cloud-hosting', 'web-hosting', 'hardware', 'cloud-service-provider', 'microsoft-partner', 'aws-partner', 'it-consulting', 'freelance']),
-  paymentTerms: z.enum(['net-15', 'net-30', 'net-45', 'net-60', 'net-90', 'annual-in-advance', 'monthly', 'quarterly', 'half-yearly']),
-  zone: z.enum(['north', 'east', 'west', 'south']).optional(),
+  phone: z.string().min(10, 'Phone number must be at least 10 digits').optional().or(z.literal('')),
+  specialization: z.string().min(2, 'Specialization is required').optional().or(z.literal('')),
+  identity: z.array(z.string()).refine((value) => value.some((item) => item), {
+    message: 'You have to select at least one identity.',
+  }),
+  paymentTerms: z.enum(['net-15', 'net-30', 'net-45', 'net-60', 'net-90', 'annual-in-advance', 'monthly', 'quarterly', 'half-yearly']).optional().or(z.literal('')),
+  zone: z.array(z.string()).optional(),
+  stageOwnerId: z.string().optional(),
+  partner_tag: z.array(z.string()).optional(),
+  partner_type: z.enum(['silver', 'gold']),
+  source_of_partner: z.string().optional(),
+  designation: z.string().optional().or(z.literal('')),
 });
 
 type PartnerFormData = z.infer<typeof partnerSchema>;
 
 interface AddPartnerFormProps {
   users: User[];
-  onPartnerAdd: (partner: Partner) => void;
+  onSuccess: () => void;
   onCancel: () => void;
 }
 
-const AddPartnerForm = ({ users, onPartnerAdd, onCancel }: AddPartnerFormProps) => {
+const countries = [
+  { name: 'India', code: 'IN', dial_code: '+91', flag: '🇮🇳' },
+  { name: 'United States', code: 'US', dial_code: '+1', flag: '🇺🇸' },
+  { name: 'United Kingdom', code: 'GB', dial_code: '+44', flag: '🇬🇧' },
+  { name: 'Australia', code: 'AU', dial_code: '+61', flag: '🇦🇺' },
+  { name: 'Canada', code: 'CA', dial_code: '+1', flag: '🇨🇦' },
+  { name: 'Germany', code: 'DE', dial_code: '+49', flag: '🇩🇪' },
+  { name: 'France', code: 'FR', dial_code: '+33', flag: '🇫🇷' },
+  { name: 'Japan', code: 'JP', dial_code: '+81', flag: '🇯🇵' },
+  { name: 'Singapore', code: 'SG', dial_code: '+65', flag: '🇸🇬' },
+  { name: 'United Arab Emirates', code: 'AE', dial_code: '+971', flag: '🇦🇪' },
+];
+
+const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
+  const [countryCode, setCountryCode] = useState('+91');
+  const { user } = useAuth();
+  const { toast } = useToast();
 
   const form = useForm<PartnerFormData>({
     resolver: zodResolver(partnerSchema),
@@ -38,55 +127,102 @@ const AddPartnerForm = ({ users, onPartnerAdd, onCancel }: AddPartnerFormProps) 
       name: '',
       email: '',
       company: '',
+      phone: '',
       specialization: '',
-      identity: 'web-app-developer',
+      identity: [],
       paymentTerms: 'net-30',
+      zone: [],
+      stageOwnerId: '',
+      partner_tag: [],
+      partner_type: 'silver',
+      source_of_partner: 'webinar',
+      designation: '',
     },
   });
+
+  const logCrmAction = async (actiontype: string, details: string) => {
+    if (!user?.id) {
+      console.error("User ID not available for logging CRM action.");
+      return;
+    }
+    try {
+      const logFormData = new FormData();
+      logFormData.append('userid', user.id);
+      logFormData.append('actiontype', actiontype);
+      logFormData.append('path', 'Add Partner Form');
+      logFormData.append('details', details);
+
+      const response = await fetch(API_ENDPOINTS.STORE_INSERT_CRM_LOGS, {
+        method: 'POST',
+        body: logFormData,
+      });
+
+      if (!response.ok) {
+        const errorResult = await response.json().catch(() => ({ message: `CRM log API request failed with status ${response.status}` }));
+        throw new Error(errorResult.message);
+      }
+    } catch (error: any) {
+      console.error("Error logging CRM action:", error.message);
+    }
+  };
 
   const onSubmit = async (data: PartnerFormData) => {
     setIsSubmitting(true);
     try {
-      const newPartner: Partner = {
-        id: `partner-${Date.now()}`,
+      // The database schema uses snake_case for column names.
+      const newPartnerData = {
         name: data.name,
         email: data.email,
+        contact_number: data.phone ? `${countryCode}${data.phone}` : undefined,
         company: data.company,
         specialization: data.specialization,
-        identity: data.identity,
-        paymentTerms: data.paymentTerms,
-        zone: data.zone,
-        assignedUserIds: assignedUserIds.length > 0 ? assignedUserIds : undefined,
-        customersCount: 0,
-        newRevenue: 0,
-        renewalRevenue: 0,
-        totalValue: 0,
-        status: 'active',
-        createdAt: new Date(),
-        agreementSigned: false,
-        productTypes: [],
+        identity: data.identity && data.identity.length > 0 ? JSON.stringify(data.identity) : undefined,
+        payment_terms: data.paymentTerms,
+        zone: data.zone && data.zone.length > 0 ? JSON.stringify(data.zone) : undefined,
+        assigned_user_ids: assignedUserIds.length > 0 ? assignedUserIds : undefined,
+        partner_tag: data.partner_tag && data.partner_tag.length > 0 ? JSON.stringify(data.partner_tag) : undefined,
+        stage_owner: data.stageOwnerId === 'none' ? undefined : data.stageOwnerId,
+        partner_type: data.partner_type,
+        source_of_partner: data.source_of_partner,
+        designation: data.designation,
       };
 
-      onPartnerAdd(newPartner);
+      const { error } = await supabase.from('partners').insert([newPartnerData]);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Partner has been added successfully.',
+      });
+      const logDetails = `Added new partner: ${data.name} (${data.email}).`;
+      await logCrmAction("Add Partner", logDetails);
       form.reset();
       setAssignedUserIds([]);
-      onCancel();
+      onSuccess();
     } catch (error) {
       console.error('Error adding partner:', error);
+      toast({
+        title: 'Error',
+        description: (error as Error).message || 'Failed to add partner. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
+    <Card className="w-full max-w-7xl mx-auto">
       <CardHeader>
         <CardTitle>Add New Partner</CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <FormField
                 control={form.control}
                 name="name"
@@ -114,9 +250,6 @@ const AddPartnerForm = ({ users, onPartnerAdd, onCancel }: AddPartnerFormProps) 
                   </FormItem>
                 )}
               />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="company"
@@ -130,56 +263,139 @@ const AddPartnerForm = ({ users, onPartnerAdd, onCancel }: AddPartnerFormProps) 
                   </FormItem>
                 )}
               />
-
-              <FormField
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Phone Number</FormLabel>
+                  <div className="flex items-start gap-2">
+                    <Select onValueChange={setCountryCode} defaultValue={countryCode}>
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue placeholder="Code" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {countries.map(c => (
+                          <SelectItem key={c.code} value={c.dial_code}>
+                            {c.flag} {c.dial_code}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormControl>
+                      <Input type="tel" placeholder="Enter phone number" {...field} />
+                    </FormControl>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
                 control={form.control}
                 name="specialization"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Specialization</FormLabel>
-                    <FormControl>
+                    <FormControl> 
                       <Input placeholder="e.g., E-commerce, Healthcare" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+            <FormField
+              control={form.control}
+              name="stageOwnerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Stage Owner</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a user to own the stage" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {users.map(user => (
+                        <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>This user will be responsible for the partner's onboarding stage.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="designation"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Designation</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., CEO, Sales Manager" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             </div>
+            
+            <FormField
+              control={form.control}
+              name="identity"
+              render={() => (
+                <FormItem>
+                  <div className="mb-4">
+                    <FormLabel className="text-base">Partner Identity</FormLabel>
+                    <FormDescription>
+                      Select one or more identities that apply to this partner.
+                    </FormDescription>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {identityOptions.map((item) => (
+                    <FormField
+                      key={item.id}
+                      control={form.control}
+                      name="identity"
+                      render={({ field }) => {
+                        return (
+                          <FormItem
+                            key={item.id}
+                            className="flex flex-row items-start space-x-3 space-y-0"
+                          >
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value?.includes(item.id)}
+                                onCheckedChange={(checked) => {
+                                  return checked
+                                    ? field.onChange([...field.value, item.id])
+                                    : field.onChange(
+                                        field.value?.filter(
+                                          (value) => value !== item.id
+                                        )
+                                      );
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              {item.label}
+                            </FormLabel>
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  ))}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="identity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Partner Identity</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select identity" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="web-app-developer">Web App Developer</SelectItem>
-                        <SelectItem value="system-integrator">System Integrator</SelectItem>
-                        <SelectItem value="managed-service-provider">Managed Service Provider</SelectItem>
-                        <SelectItem value="digital-marketer">Digital Marketer</SelectItem>
-                        <SelectItem value="cyber-security">Cyber Security</SelectItem>
-                        <SelectItem value="cloud-hosting">Cloud Hosting</SelectItem>
-                        <SelectItem value="web-hosting">Web Hosting</SelectItem>
-                        <SelectItem value="hardware">Hardware</SelectItem>
-                        <SelectItem value="cloud-service-provider">Cloud Service Provider</SelectItem>
-                        <SelectItem value="microsoft-partner">Microsoft Partner</SelectItem>
-                        <SelectItem value="aws-partner">AWS Partner</SelectItem>
-                        <SelectItem value="it-consulting">IT Consulting</SelectItem>
-                        <SelectItem value="freelance">Freelance</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <FormField
                 control={form.control}
                 name="paymentTerms"
@@ -208,27 +424,148 @@ const AddPartnerForm = ({ users, onPartnerAdd, onCancel }: AddPartnerFormProps) 
                   </FormItem>
                 )}
               />
-            </div>
-
-            <FormField
+              <FormField
               control={form.control}
-              name="zone"
+              name="partner_type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Zone (Optional)</FormLabel>
+                  <FormLabel>Partner Type</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select zone" />
+                        <SelectValue placeholder="Select partner type" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="north">North</SelectItem>
-                      <SelectItem value="east">East</SelectItem>
-                      <SelectItem value="west">West</SelectItem>
-                      <SelectItem value="south">South</SelectItem>
+                      <SelectItem value="silver">Silver partner</SelectItem>
+                      <SelectItem value="gold">Gold partner</SelectItem>
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+                control={form.control}
+                name="source_of_partner"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Source of Partner</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Select a source" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {sourceOfPartnerOptions.map(option => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+             <FormField
+              control={form.control}
+              name="zone"
+              render={() => (
+                <FormItem>
+                  <div className="mb-4">
+                    <FormLabel className="text-base">Zone (Optional)</FormLabel>
+                    <FormDescription>
+                      Select the zones this partner operates in.
+                    </FormDescription>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {zoneOptions.map((item) => (
+                    <FormField
+                      key={item.id}
+                      control={form.control}
+                      name="zone"
+                      render={({ field }) => {
+                        return (
+                          <FormItem
+                            key={item.id}
+                            className="flex flex-row items-start space-x-3 space-y-0"
+                          >
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value?.includes(item.id)}
+                                onCheckedChange={(checked) => {
+                                  return checked
+                                    ? field.onChange([...(field.value || []), item.id])
+                                    : field.onChange(
+                                        (field.value || [])?.filter(
+                                          (value) => value !== item.id
+                                        )
+                                      );
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              {item.label}
+                            </FormLabel>
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  ))}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            
+
+            <FormField
+              control={form.control}
+              name="partner_tag"
+              render={() => (
+                <FormItem>
+                  <div className="mb-4">
+                    <FormLabel className="text-base">Partner Tags</FormLabel>
+                    <FormDescription>
+                      Select tags that apply to this partner.
+                    </FormDescription>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {partnerTagOptions.map((item) => (
+                    <FormField
+                      key={item.id}
+                      control={form.control}
+                      name="partner_tag"
+                      render={({ field }) => {
+                        return (
+                          <FormItem
+                            key={item.id}
+                            className="flex flex-row items-start space-x-3 space-y-0"
+                          >
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value?.includes(item.id)}
+                                onCheckedChange={(checked) => {
+                                  return checked
+                                    ? field.onChange([...(field.value || []), item.id])
+                                    : field.onChange(
+                                        (field.value || [])?.filter(
+                                          (value) => value !== item.id
+                                        )
+                                      );
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="font-normal">
+                              {item.label}
+                            </FormLabel>
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  ))}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}

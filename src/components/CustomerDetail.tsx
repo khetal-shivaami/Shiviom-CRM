@@ -1,12 +1,13 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Mail, Building, MapPin, User, Package, Edit, Clock, CheckCircle, AlertCircle, Calendar } from 'lucide-react';
+import { ArrowLeft, Mail, Building, MapPin, User, Package, Edit, Clock, CheckCircle, AlertCircle, Calendar, Loader2, Globe, Phone } from 'lucide-react';
 import { Customer, Partner, Product, User as UserType, Task } from '../types';
-import { mockTasks } from '../utils/mockTasks';
 import CustomerEditDialog from './CustomerEditDialog';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface CustomerDetailProps {
   customer: Customer;
@@ -14,23 +15,72 @@ interface CustomerDetailProps {
   products: Product[];
   users: UserType[];
   onBack: () => void;
-  onCustomerUpdate?: (customerId: string, updates: Partial<Customer>) => void;
+  onCustomerUpdate: (updatedCustomer: Customer) => void;
 }
 
 const CustomerDetail = ({ customer, partners, products, users, onBack, onCustomerUpdate }: CustomerDetailProps) => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const partner = partners.find(p => p.id === customer.partnerId) || null;
+  const [customerTasks, setCustomerTasks] = useState<Task[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
+  const { toast } = useToast();
 
-  const getPartnerName = (partnerId?: string) => {
-    const partner = partners.find(p => p.id === partnerId);
-    return partner ? partner.name : 'Unassigned';
+  const getPartnerName = () => {
+    const supabasePartner = partners.find(p => p.id === customer.partnerId);
+    if (supabasePartner) return supabasePartner.name;
+    if (customer.partnerName) return customer.partnerName; // From Supabase join
+    return customer.resellerName || ''; // From CRM API or fallback
   };
 
-  const getProductNames = (productIds?: string[]) => {
-    if (!productIds || productIds.length === 0) return [];
-    return productIds
-      .map(id => products.find(p => p.id === id))
-      .filter(Boolean) as Product[];
-  };
+  useEffect(() => {
+    const fetchTasksForCustomer = async () => {
+        if (!customer.id) return;
+        setIsLoadingTasks(true);
+        try {
+            const { data, error } = await supabase
+                .from('tasks')
+                .select('*')
+                .eq('portal_customer_id', customer.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            const transformedTasks: Task[] = data.map(task => ({
+                id: task.id,
+                title: task.title,
+                description: task.description,
+                status: task.status as Task['status'],
+                priority: task.priority as Task['priority'],
+                type: task.type as Task['type'],
+                assignedTo: task.assigned_to,
+                assignedBy: task.assigned_by,
+                customerId: task.portal_customer_id,
+                customerDomain: task.customer_domain,
+                partnerId: task.partner_id,
+                portal_reseller_id: task.portal_reseller_id,
+                dueDate: task.due_date ? new Date(task.due_date) : undefined,
+                createdAt: new Date(task.created_at),
+                updatedAt: task.updated_at ? new Date(task.updated_at) : undefined,
+                completedAt: task.completed_at ? new Date(task.completed_at) : undefined,
+                notes: task.notes,
+                tags: task.tags || [],
+                estimatedHours: task.estimated_hours,
+                actualHours: task.actual_hours,
+                isOnboardingTask: task.is_onboarding_task,
+            }));
+            setCustomerTasks(transformedTasks);
+        } catch (error: any) {
+            toast({ title: 'Error fetching tasks', description: error.message, variant: 'destructive' });
+        } finally {
+            setIsLoadingTasks(false);
+        }
+    };
+
+    if (customer) {
+        fetchTasksForCustomer();
+    }
+  }, [customer, toast]);
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -64,11 +114,6 @@ const CustomerDetail = ({ customer, partners, products, users, onBack, onCustome
     }
   };
 
-  const customerProducts = getProductNames(customer.productIds);
-  
-  // Get tasks related to this customer
-  const customerTasks = mockTasks.filter(task => task.customerId === customer.id);
-  
   const getTaskStatusIcon = (status: Task['status']) => {
     switch (status) {
       case 'completed':
@@ -121,11 +166,6 @@ const CustomerDetail = ({ customer, partners, products, users, onBack, onCustome
     overdue: customerTasks.filter(t => t.status === 'overdue').length,
   };
 
-  const handleEditSave = (customerId: string, updates: Partial<Customer>) => {
-    onCustomerUpdate?.(customerId, updates);
-    setIsEditDialogOpen(false);
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -151,10 +191,22 @@ const CustomerDetail = ({ customer, partners, products, users, onBack, onCustome
                   <Mail size={16} />
                   <span>{customer.email}</span>
                 </div>
+                {customer.phone && (
+                  <div className="flex items-center gap-1">
+                    <Phone size={16} />
+                    <span>{customer.phone}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-1">
                   <Building size={16} />
                   <span>{customer.company}</span>
                 </div>
+                {(customer.customer_domain || customer.domainName) && (
+                  <div className="flex items-center gap-1">
+                    <Globe size={16} />
+                    <span>{customer.customer_domain || customer.domainName}</span>
+                  </div>
+                )}
                 {customer.zone && (
                   <div className="flex items-center gap-1">
                     <MapPin size={16} />
@@ -181,7 +233,7 @@ const CustomerDetail = ({ customer, partners, products, users, onBack, onCustome
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <h4 className="font-semibold text-sm text-muted-foreground">Partner</h4>
-              <p className="text-lg">{getPartnerName(customer.partnerId)}</p>
+              <p className="text-lg">{getPartnerName()}</p>
             </div>
             <div>
               <h4 className="font-semibold text-sm text-muted-foreground">Customer Value</h4>
@@ -209,32 +261,44 @@ const CustomerDetail = ({ customer, partners, products, users, onBack, onCustome
 
       {/* Products */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Products ({customerProducts.length})</h2>
-        </div>
-        {customerProducts.length === 0 ? (
+        <h2 className="text-xl font-semibold mb-4">Products</h2>
+        {!customer.deal_products || customer.deal_products.length === 0 ? (
           <Card>
             <CardContent className="flex items-center justify-center py-8">
               <p className="text-muted-foreground">No products assigned to this customer.</p>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {customerProducts.map((product) => (
-              <Card key={product.id}>
-                <CardHeader>
-                  <CardTitle className="text-lg">{product.name}</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Package size={16} className="text-muted-foreground" />
-                    <Badge variant="outline">{product.category}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{product.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
+                        <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Licenses</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Price/License</th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {customer.deal_products.map((deal, index) => (
+                        <tr key={index}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{deal.productName || 'N/A'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{deal.skuName || 'N/A'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{deal.licenseCount}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{deal.planType}{deal.planDuration ? ` (${deal.planDuration} Yr)` : ''}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">₹{deal.pr_shivaamiprice?.toLocaleString('en-IN')}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right font-medium">₹{deal.shivaamisubtotal?.toLocaleString('en-IN')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
         )}
       </div>
 
@@ -304,7 +368,14 @@ const CustomerDetail = ({ customer, partners, products, users, onBack, onCustome
         </div>
 
         {/* Tasks List */}
-        {customerTasks.length === 0 ? (
+        {isLoadingTasks ? (
+          <Card>
+            <CardContent className="flex items-center justify-center py-8 gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <p className="text-muted-foreground">Loading tasks...</p>
+            </CardContent>
+          </Card>
+        ) : customerTasks.length === 0 ? (
           <Card>
             <CardContent className="flex items-center justify-center py-8">
               <p className="text-muted-foreground">No tasks assigned to this customer.</p>
@@ -374,7 +445,10 @@ const CustomerDetail = ({ customer, partners, products, users, onBack, onCustome
         users={users}
         isOpen={isEditDialogOpen}
         onClose={() => setIsEditDialogOpen(false)}
-        onSave={handleEditSave}
+        onSuccess={(updatedCustomer) => {
+          onCustomerUpdate(updatedCustomer);
+          setIsEditDialogOpen(false);
+        }}
       />
     </div>
   );

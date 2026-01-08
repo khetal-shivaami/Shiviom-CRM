@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Download, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Customer, Partner, Product, User } from '../types';
 
 interface BulkImportDialogProps {
@@ -15,6 +16,7 @@ interface BulkImportDialogProps {
 }
 
 const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) => {
+  const { user } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -175,6 +177,32 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
     return data;
   };
 
+     const logCrmAction = async (actiontype: string, details: string) => {
+        if (!user?.id) {
+            console.error("User ID not available for logging CRM action.");
+            return;
+        }
+        try {
+            const formData = new FormData();
+            formData.append('userid', user.id);
+            formData.append('actiontype', actiontype);
+            formData.append('path', 'Bulk Import Dialog');
+            formData.append('details', details);
+
+            const response = await fetch(API_ENDPOINTS.STORE_INSERT_CRM_LOGS, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorResult = await response.json().catch(() => ({ message: `CRM log API request failed with status ${response.status}` }));
+                throw new Error(errorResult.message);
+            }
+        } catch (error: any) {
+            console.error("Error logging CRM action:", error.message);
+        }
+    };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = event.target.files?.[0];
     if (!uploadedFile) return;
@@ -202,7 +230,8 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
       console.log(`Processing ${data.length} ${type} records:`, data);
       
       onImport(data);
-      setSuccess(true);
+            setSuccess(true);
+              await logCrmAction("Bulk Import", `Imported ${data.length} records into ${type}.`);
       setFile(null);
       
       // Reset file input

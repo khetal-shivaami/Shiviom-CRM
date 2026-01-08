@@ -23,7 +23,7 @@ BEGIN
   -- It will help create the auth users that correspond to the profiles above
   
   RETURN 'Sample users need to be created manually in Supabase Auth. Use these credentials:
-  1. admin@shiviom.com / admin123 (user_id: 11111111-1111-1111-1111-111111111111)
+  1. admin@shiviom.com / admin12356 (user_id: 11111111-1111-1111-1111-111111111111)
   2. manager@shiviom.com / manager123 (user_id: 22222222-2222-2222-2222-222222222222)  
   3. user@shiviom.com / user123 (user_id: 33333333-3333-3333-3333-333333333333)
   

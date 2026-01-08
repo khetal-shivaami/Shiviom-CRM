@@ -14,10 +14,14 @@ import ImportData from '@/components/ImportData';
 import PartnerProspects from '@/components/PartnerProspects';
 import CustomerView from '@/components/CustomerView';
 import PartnerOnboarding from '@/components/PartnerOnboarding';
+import Quotations from '@/components/Quotations';
 import TaskManagement from '@/components/TaskManagement';
+import DeploymentPage from '@/components/Deployment';
 import { Customer, Partner, Product, User, Renewal, DashboardStats as StatsType } from '@/types';
 import { Dashboard } from './DashboardManager';
 import { useAuth } from '@/contexts/AuthContext';
+import ZohoTicketModule from '@/components/ZohoTicketModule';
+
 
 interface TabContentRendererProps {
   activeTab: string;
@@ -55,6 +59,7 @@ interface TabContentRendererProps {
   onUserAdd?: (user: Omit<User, 'id' | 'createdAt'>) => Promise<void>;
   onUserUpdate?: (userId: string, updates: Partial<User>) => Promise<void>;
   onUserBulkStatusChange?: (userIds: string[], status: 'active' | 'inactive') => Promise<void>;
+  onUsersChange?: (dataType: 'users') => void; // Prop to trigger a refetch for a specific data type
 }
 
 const TabContentRenderer = ({
@@ -92,7 +97,8 @@ const TabContentRenderer = ({
   onPartnerAdd,
   onUserAdd,
   onUserUpdate,
-  onUserBulkStatusChange
+  onUserBulkStatusChange,
+  onUsersChange
 }: TabContentRendererProps) => {
   const { isAdmin, profile } = useAuth();
   // Wrapper functions to match CustomerTable's expected signatures
@@ -208,7 +214,7 @@ const TabContentRenderer = ({
         />
       );
     case 'partner-onboarding':
-      return <PartnerOnboarding partners={partners} users={users} onPartnerAdd={onPartnerAdd} />;
+      return <PartnerOnboarding users={users} />;
     case 'tasks':
       return <TaskManagement customers={customers} partners={partners} users={users} currentUserId={profile?.user_id} />;
     case 'partners':
@@ -233,6 +239,10 @@ const TabContentRenderer = ({
       );
     case 'renewals':
       return <Renewals renewals={renewals} customers={customers} partners={partners} products={products} />;
+    case 'quotations':
+      return <Quotations />;
+    case 'zoho-tickets':
+      return <ZohoTicketModule />;
     case 'user-hierarchy':
       if (!isAdmin) {
         return (
@@ -252,6 +262,7 @@ const TabContentRenderer = ({
             onBulkStatusChange={handleUserBulkStatusChange}
             onUserUpdate={handleUserUpdate}
             onUserAdd={handleUserAdd}
+            onDataChange={() => onUsersChange ? onUsersChange('users') : console.warn('onUsersChange is not implemented')}
           />
         </div>
       );
@@ -278,6 +289,8 @@ const TabContentRenderer = ({
           onProductImport={onProductImport}
         />
       );
+    case 'deployment':
+      return <DeploymentPage customers={customers} products={products} users={users} />;
     default:
       return (
         <div className="space-y-6">

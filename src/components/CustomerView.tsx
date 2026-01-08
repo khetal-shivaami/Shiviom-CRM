@@ -1,45 +1,137 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search, Mail, Phone, Building, MapPin } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { Customer, Partner, Product, User } from '../types';
 import CustomerDetail from './CustomerDetail';
+import { API_ENDPOINTS } from '@/config/api';
 
 interface CustomerViewProps {
-  customers: Customer[];
   partners: Partner[];
   products: Product[];
   users: User[];
-  onCustomerUpdate?: (customerId: string, updates: Partial<Customer>) => void;
 }
 
 const CustomerView = ({ 
-  customers, 
   partners, 
   products, 
   users,
-  onCustomerUpdate
 }: CustomerViewProps) => {
+  const { toast } = useToast();
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [progress, setProgress] = useState(10);
+  const recordsPerPage = 20;
 
-  // Filter for customers only (won or deployment)
-  const customersList = useMemo(() => {
-    return customers.filter(customer => 
-      customer.process === 'won' || customer.process === 'deployment'
-    );
-  }, [customers]);
+  useEffect(() => {
+    if (loading) {
+      const timer = setInterval(() => {
+        setProgress(prev => (prev >= 95 ? 95 : prev + 5));
+      }, 200);
+      return () => clearInterval(timer);
+    } else {
+      setProgress(100);
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    // Reset to first page when search term changes
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(API_ENDPOINTS.GET_RESELLER_CUSTOEMRS_LIST_ONCRM, {
+          method: 'POST',
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json();
+        if (!result.success || !result.data || !result.data.data_result) {
+          throw new Error('Invalid API response structure for customers.');
+        }
+
+        const apiCustomers = result.data.data_result;
+
+        // Create a map for quick lookup of partner's Supabase ID from their portal ID
+        const partnerIdMap = new Map(partners.map(p => [p.portal_reseller_id, p.id]));
+
+        const transformedData: Customer[] = apiCustomers.map((c: any) => {
+          const supabasePartnerId = c.reseller_id ? partnerIdMap.get(c.reseller_id) : undefined;
+          return {
+            id: c.cust_id,
+            name: c.company_name || 'N/A',
+            email: c.customer_emailid || '',
+            phone: c.customer_contact_number || '',
+            company: c.customer_company_name || c.customer_domainname || 'N/A',
+            resellerName: c.reseller_name || '',
+            domainName: c.customer_domainname,
+            partnerId: supabasePartnerId,
+            createdAt: new Date(c.created_on),
+            // Default values for fields not present in the API response
+            status: 'active',
+            process: 'won',
+            value: 0,
+            productIds: [],
+            assignedUserIds: [],
+          };
+        }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort by creation date descending
+
+        if (transformedData) {
+          setCustomers(transformedData);
+        }
+      } catch (err: any) {
+        setError(err.message);
+        toast({ title: "Error", description: "Failed to load customer data.", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCustomers();
+  }, [toast, partners]);
+
+  const getPartnerName = (partnerId?: string) => {
+    if (!partners) {
+      return '...';
+    }
+    const partner = partners.find((p) => p.id === partnerId);
+    return partner ? partner.name : 'Unassigned';
+  };
 
   const filteredCustomers = useMemo(() => {
-    return customersList.filter(customer => {
-      const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           customer.company.toLowerCase().includes(searchTerm.toLowerCase());
+    return customers.filter(customer => {
+      const searchTermLower = searchTerm.toLowerCase();
+      const partnerName = getPartnerName(customer.partnerId);
+
+      const matchesSearch = customer.name.toLowerCase().includes(searchTermLower) ||
+                           customer.email.toLowerCase().includes(searchTermLower) ||
+                           customer.company.toLowerCase().includes(searchTermLower) ||
+                           customer.resellerName.toLowerCase().includes(searchTermLower) ||
+                           partnerName.toLowerCase().includes(searchTermLower);
       return matchesSearch;
     });
-  }, [customersList, searchTerm]);
+  }, [customers, searchTerm, partners, getPartnerName]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredCustomers.length / recordsPerPage);
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentCustomerRecords = filteredCustomers.slice(indexOfFirstRecord, indexOfLastRecord);
+
 
   const handleCustomerClick = (customer: Customer) => {
     setSelectedCustomer(customer);
@@ -49,14 +141,12 @@ const CustomerView = ({
     setSelectedCustomer(null);
   };
 
-  const handleCustomerUpdate = (customerId: string, updates: Partial<Customer>) => {
-    const updatedCustomer = { ...updates, lastEdited: new Date() };
-    onCustomerUpdate?.(customerId, updatedCustomer);
-  };
-
-  const getPartnerName = (partnerId?: string) => {
-    const partner = partners.find(p => p.id === partnerId);
-    return partner ? partner.name : 'Unassigned';
+  const handleCustomerUpdate = (updatedCustomer: Customer) => {
+    // Update the list of customers
+    setCustomers(prev => prev.map(c => (c.id === updatedCustomer.id ? updatedCustomer : c)));
+    
+    // Update the selected customer to reflect changes immediately in the detail view
+    setSelectedCustomer(updatedCustomer);
   };
 
   const getProductNames = (productIds?: string[]) => {
@@ -86,11 +176,53 @@ const CustomerView = ({
   };
 
   const stats = {
-    total: customersList.length,
-    totalValue: customersList.reduce((sum, customer) => sum + customer.value, 0),
-    activeProducts: new Set(customersList.flatMap(c => c.productIds || [])).size,
-    avgValue: customersList.length > 0 ? customersList.reduce((sum, customer) => sum + customer.value, 0) / customersList.length : 0
+    total: filteredCustomers.length,
+    totalValue: filteredCustomers.reduce((sum, customer) => sum + customer.value, 0),
+    activeProducts: new Set(filteredCustomers.flatMap(c => c.productIds || [])).size,
+    avgValue: filteredCustomers.length > 0 ? filteredCustomers.reduce((sum, customer) => sum + customer.value, 0) / filteredCustomers.length : 0
   };
+
+  const paginationControls = (
+    <div className="flex items-center justify-between pt-4">
+      <div className="text-sm text-muted-foreground">
+        Showing <strong>{filteredCustomers.length > 0 ? indexOfFirstRecord + 1 : 0}</strong> to <strong>{Math.min(indexOfLastRecord, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> customers.
+      </div>
+      <div className="flex items-center space-x-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+        >
+          Previous
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          Page {currentPage} of {totalPages > 0 ? totalPages : 1}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+          disabled={currentPage === totalPages || totalPages === 0}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 space-y-4">
+        <p className="text-muted-foreground">Loading customer data...</p>
+        <Progress value={progress} className="w-1/2" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="p-4 text-red-500">Error loading customers: {error}</div>;
+  }
 
   if (selectedCustomer) {
     return (
@@ -162,10 +294,11 @@ const CustomerView = ({
       <Card>
         <CardHeader>
           <CardTitle>
-            Customers ({filteredCustomers.length} of {customersList.length})
+            Customers ({filteredCustomers.length} of {customers.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {paginationControls}
           <Table>
             <TableHeader>
               <TableRow>
@@ -179,7 +312,7 @@ const CustomerView = ({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCustomers.map((customer) => (
+              {currentCustomerRecords.map((customer) => (
                 <TableRow 
                   key={customer.id} 
                   className="hover:bg-muted/50 cursor-pointer"
@@ -189,7 +322,7 @@ const CustomerView = ({
                     <div className="space-y-1">
                       <div className="font-medium flex items-center gap-2">
                         <Building size={16} className="text-muted-foreground" />
-                        {customer.company}
+                        {customer.domainName}
                       </div>
                       <div className="text-sm text-muted-foreground">{customer.name}</div>
                     </div>
@@ -213,7 +346,7 @@ const CustomerView = ({
                       {getAssignedUserNames(customer.assignedUserIds)}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Partner: {getPartnerName(customer.partnerId)}
+                      Partner: {customer.resellerName || getPartnerName(customer.partnerId)}
                     </div>
                   </TableCell>
                   <TableCell className="max-w-xs">
@@ -239,6 +372,7 @@ const CustomerView = ({
               ))}
             </TableBody>
           </Table>
+          {paginationControls}
         </CardContent>
       </Card>
     </div>

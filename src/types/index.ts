@@ -4,6 +4,7 @@ export interface Customer {
   email: string;
   phone: string;
   company: string;
+  domainName?: string;
   status: 'active' | 'inactive' | 'pending';
   process?: 'prospect' | 'demo' | 'poc' | 'negotiating' | 'lost' | 'won' | 'deployment';
   partnerId?: string;
@@ -12,12 +13,19 @@ export interface Customer {
   value: number;
   zone?: 'north' | 'east' | 'west' | 'south';
   assignedUserIds?: string[]; // Changed from single assignedEmployeeId to array
+  resellerName?: string; // From CRM API
+  partnerName?: string; // From Supabase join
+  google_custid?:string;
+  zoho_id?: string;
 }
 
 export interface Partner {
+  renewal_manager_id: string;
+  renewal_manager_name: string;
   id: string;
   name: string;
   email: string;
+  phone: string;
   company: string;
   specialization: string;
   identity: 'web-app-developer' | 'system-integrator' | 'managed-service-provider' | 'digital-marketer' | 'cyber-security' | 'cloud-hosting' | 'web-hosting' | 'hardware' | 'cloud-service-provider' | 'microsoft-partner' | 'aws-partner' | 'it-consulting' | 'freelance';
@@ -34,9 +42,15 @@ export interface Partner {
   assignedUserIds?: string[]; // Changed from single assignedEmployeeId to array
   zone?: 'north' | 'east' | 'west' | 'south';
   onboarding?: PartnerOnboardingData;
+  portal_reseller_id?: string;
+  partner_discount?: number;
+  contact_number?: string;
+  stage_owner?: string | null;
+  partner_program?: string;
+  margin?: string;
 }
 
-export type OnboardingStage = 'outreach' | 'product-overview' | 'partner-program' | 'kyc' | 'agreement' | 'onboarded';
+export type OnboardingStage = 'outreach' | 'product-overview' | 'partner-program' | 'portal-activation' | 'agreement'|  'kyc'  | 'onboarded';
 
 export interface OnboardingStageData {
   stage: OnboardingStage;
@@ -73,6 +87,7 @@ export interface ProductPlan {
   id: string;
   name: string;
   price: number;
+  renewalPrice?: number;
   billing: 'monthly' | 'yearly' | 'one-time';
   isPopular?: boolean;
 }
@@ -90,6 +105,7 @@ export interface Product {
   lastEdited?: Date;
   // Legacy price field for backward compatibility
   price?: number;
+  portal_prod_id?: string
 }
 
 export interface DashboardStats {
@@ -121,6 +137,7 @@ export interface DashboardStats {
   // Performance metrics
   averageDealSize: number;
   monthlyGrowthRate: number;
+  tasks?: Task[];
 }
 
 export interface User {
@@ -147,11 +164,33 @@ export interface Renewal {
   partnerId: string;
   productId: string;
   renewalDate: Date;
+  googleRenewalDate?: Date;
+  shivaamiRenewalDate?: Date;
   contractValue: number;
   status: 'upcoming' | 'due' | 'overdue' | 'renewed' | 'cancelled';
   notificationSent: boolean;
   lastContactDate?: Date;
   notes?: string;
+  price: number;
+  revenue_amt: number;
+}
+
+export interface RenewalComment {
+  id: string;
+  created_at: Date;
+  renewal_id: string;
+  comment: string;
+  created_by_id?: string;
+  created_by_name?: string;
+}
+
+export interface CustomerComment {
+  id: string;
+  created_at: Date;
+  customer_id: string;
+  comment: string;
+  created_by_id?: string;
+  created_by_name?: string;
 }
 
 export interface Dashboard {
@@ -182,13 +221,15 @@ export interface Task {
   description?: string;
   status: 'pending' | 'in-progress' | 'completed' | 'overdue';
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  dueDate?: Date;
+  due_date?: Date | string | null;
   createdAt: Date;
   updatedAt?: Date;
   assignedTo: string; // User ID
   assignedBy?: string; // User ID
   customerId?: string; // Associated customer
+  customerDomain?: string;
   partnerId?: string; // Associated partner
+  portal_reseller_id?: string;
   type: 'customer-outreach' | 'partner-onboarding' | 'renewal-follow-up' | 'training' | 'technical-support' | 'follow-up' | 'meeting' | 'document-review' | 'approval' | 'negotiation' | 'onboarding' | 'support' | 'other';
   notes?: string;
   tags?: string[];
@@ -242,4 +283,28 @@ export interface PartnerStageReversalRequest {
   comments?: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface PartnerNote {
+  id: string;
+  created_at: Date;
+  partner_id: string;
+  portal_reseller_id?: string;
+  note: string;
+  stage?: string;
+  created_by: string; // user id
+  creatername?: string;
+  // This will be populated by the query
+  profiles: { first_name: string | null, last_name: string | null } | null;
+}
+
+export interface PartnerComment {
+  id: string;
+  created_at: Date;
+  partner_id: string;
+  portal_reseller_id?: string;
+  partner_name?: string;
+  comment: string;
+  created_by: string; // user id
+  created_by_name: string;
 }

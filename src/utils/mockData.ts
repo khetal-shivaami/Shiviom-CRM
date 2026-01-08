@@ -20,6 +20,7 @@ export const mockProducts: Product[] = [
         id: '1-2',
         name: 'Business',
         price: 8.00,
+        renewalPrice: 9.50,
         billing: 'monthly',
         isPopular: true,
       },
@@ -129,64 +130,7 @@ export const mockProducts: Product[] = [
     price: 179.99,
     createdAt: new Date('2024-02-15'),
   },
-  {
-    id: '5',
-    name: 'Okta',
-    website: 'okta.com',
-    category: 'Identity Management',
-    description: 'Enterprise identity and access management platform',
-    status: 'active',
-    customersCount: 6,
-    plans: [
-      {
-        id: '5-1',
-        name: 'Workforce Identity',
-        price: 2.00,
-        billing: 'monthly',
-      },
-      {
-        id: '5-2',
-        name: 'Customer Identity',
-        price: 0.55,
-        billing: 'monthly',
-        isPopular: true,
-      }
-    ],
-    price: 399.99,
-    createdAt: new Date('2024-03-01'),
-  },
-  {
-    id: '6',
-    name: 'Slack',
-    website: 'slack.com',
-    category: 'Communication',
-    description: 'Business communication and collaboration platform',
-    status: 'active',
-    customersCount: 10,
-    plans: [
-      {
-        id: '6-1',
-        name: 'Pro',
-        price: 7.25,
-        billing: 'monthly',
-      },
-      {
-        id: '6-2',
-        name: 'Business+',
-        price: 12.50,
-        billing: 'monthly',
-        isPopular: true,
-      },
-      {
-        id: '6-3',
-        name: 'Enterprise Grid',
-        price: 19.00,
-        billing: 'monthly',
-      }
-    ],
-    price: 89.99,
-    createdAt: new Date('2024-03-15'),
-  },
+  
 ];
 
 export const mockPartners: Partner[] = [

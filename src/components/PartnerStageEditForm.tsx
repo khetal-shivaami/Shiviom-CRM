@@ -15,8 +15,9 @@ const stageOptions: OnboardingStage[] = [
   'outreach',
   'product-overview', 
   'partner-program',
-  'kyc',
+  'portal-activation',
   'agreement',
+  'kyc',
   'onboarded'
 ];
 
@@ -24,9 +25,10 @@ const stageLabels: Record<OnboardingStage, string> = {
   'outreach': 'Outreach',
   'product-overview': 'Product Overview',
   'partner-program': 'Partner Program',
-  'kyc': 'KYC',
+  'portal-activation': 'Portal Activation',
   'agreement': 'Agreement',
-  'onboarded': 'Onboarded'
+  'kyc': 'KYC',
+  'onboarded': 'Onboarded',
 };
 
 export function PartnerStageEditForm({ partner, onUpdate }: PartnerStageEditFormProps) {
@@ -105,10 +107,6 @@ export function PartnerStageEditForm({ partner, onUpdate }: PartnerStageEditForm
           ))}
         </SelectContent>
       </Select>
-      
-      <Button variant="ghost" size="sm">
-        <Edit3 className="h-4 w-4" />
-      </Button>
 
       {pendingStageChange && (
         <PartnerStageApprovalDialog

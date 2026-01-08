@@ -18,6 +18,7 @@ interface AdminPasswordResetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   userEmail: string;
+  userId: string;
   userName: string;
 }
 
@@ -25,6 +26,7 @@ const AdminPasswordResetDialog: React.FC<AdminPasswordResetDialogProps> = ({
   open,
   onOpenChange,
   userEmail,
+  userId,
   userName,
 }) => {
   const [newPassword, setNewPassword] = useState('');
@@ -50,32 +52,30 @@ const AdminPasswordResetDialog: React.FC<AdminPasswordResetDialogProps> = ({
     setLoading(true);
 
     try {
-      // For now, we'll use the reset password email method since direct password update requires service role
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(userEmail, {
-        redirectTo: `${window.location.origin}/auth/reset`,
+      const { data, error: functionError } = await supabase.functions.invoke('reset-user-password', {
+        body: { userId, newPassword },
       });
 
-      if (resetError) {
-        setError(resetError.message);
+      if (functionError) throw functionError;
+
+      // The function itself might return an error object in its data payload
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      
         toast({
-          title: "Reset Failed",
-          description: resetError.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Password Reset Email Sent",
-          description: `A password reset email has been sent to ${userEmail}`,
+          title: "Password Reset Successful",
+          description: `Password for ${userName} has been updated.`,
         });
         onOpenChange(false);
         setNewPassword('');
         setConfirmPassword('');
-      }
     } catch (err) {
-      setError('An unexpected error occurred');
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMessage);
       toast({
         title: "Error",
-        description: "Failed to reset password",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -136,7 +136,7 @@ const AdminPasswordResetDialog: React.FC<AdminPasswordResetDialogProps> = ({
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Sending Reset Email...' : 'Send Reset Email'}
+              {loading ? 'Resetting...' : 'Reset Password'}
             </Button>
           </DialogFooter>
         </form>

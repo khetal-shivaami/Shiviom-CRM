@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getDashboardStats } from '@/utils/api';
 import { useDataManager } from '@/components/DataManager';
 import SidebarComponent from '@/components/Sidebar';
@@ -22,6 +22,7 @@ const Index = () => {
   const [customDateRange, setCustomDateRange] = useState<{ from: Date; to: Date } | undefined>(undefined);
   const [dashboards, setDashboards] = useState<Dashboard[]>(defaultDashboards);
   const [activeDashboard, setActiveDashboard] = useState(dashboards[0].id);
+  const queryClient = useQueryClient();
   const isMobile = useIsMobile();
 
   const {
@@ -49,6 +50,11 @@ const Index = () => {
   useEffect(() => {
     setSearchParams({ tab: activeTab });
   }, [activeTab, setSearchParams]);
+
+  const handleDataChange = (dataType: 'users' | 'customers' | 'partners' | 'products') => {
+    // Invalidate the query for the specific data type to trigger a refetch
+    queryClient.invalidateQueries({ queryKey: [dataType] });
+  };
 
   const { data: stats, isLoading, isError } = useQuery<StatsType>({
     queryKey: ['dashboardStats', timeframe, customDateRange],
@@ -177,6 +183,7 @@ const Index = () => {
               onUserAdd={handleUserAdd}
               onUserUpdate={handleUserUpdate}
               onUserBulkStatusChange={handleUserBulkStatusChange}
+              onUsersChange={() => handleDataChange('users')}
             />
           </div>
         </div>
@@ -221,6 +228,7 @@ const Index = () => {
           onUserAdd={handleUserAdd}
           onUserUpdate={handleUserUpdate}
           onUserBulkStatusChange={handleUserBulkStatusChange}
+          onUsersChange={() => handleDataChange('users')}
         />
       </div>
     );
@@ -276,6 +284,7 @@ const Index = () => {
               onUserAdd={handleUserAdd}
               onUserUpdate={handleUserUpdate}
               onUserBulkStatusChange={handleUserBulkStatusChange}
+              onUsersChange={() => handleDataChange('users')}
             />
           </main>
         </SidebarInset>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,13 +8,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Search, Edit, Plus, ArrowLeft } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { Customer, Partner, Product, User } from '../types';
 import CustomerDetail from './CustomerDetail';
 import CustomerTableFilters from './CustomerTableFilters';
 import CustomerForm from './CustomerForm';
 
 interface CustomerManagementProps {
-  customers: Customer[];
   partners: Partner[];
   products: Product[];
   users: User[];
@@ -24,7 +24,6 @@ interface CustomerManagementProps {
 }
 
 const CustomerManagement = ({ 
-  customers, 
   partners, 
   products, 
   users,
@@ -32,6 +31,9 @@ const CustomerManagement = ({
   onBulkAction,
   onCustomerAdd 
 }: CustomerManagementProps) => {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [processFilter, setProcessFilter] = useState('all');
@@ -40,6 +42,50 @@ const CustomerManagement = ({
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error: supabaseError } = await supabase
+          .from('customers')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (supabaseError) {
+          throw supabaseError;
+        }
+
+        if (data) {
+          const transformedData: Customer[] = data.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            email: item.email,
+            phone: item.phone,
+            company: item.company,
+            status: item.status,
+            process: item.process,
+            value: item.value,
+            zone: item.zone,
+            partnerId: item.partner_id,
+            productIds: item.product_ids,
+            assignedUserIds: item.assigned_user_ids,
+            createdAt: new Date(item.created_at),
+            lastEdited: item.last_edited ? new Date(item.last_edited) : undefined,
+          }));
+          setCustomers(transformedData);
+        }
+      } catch (err: any) {
+        setError(err.message);
+        console.error("Error fetching customers:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCustomers();
+  }, []);
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(customer => {
@@ -164,6 +210,14 @@ const CustomerManagement = ({
     won: customers.filter(c => c.process === 'won').length,
     deployment: customers.filter(c => c.process === 'deployment').length
   };
+
+  if (loading) {
+    return <div className="p-4">Loading customer data...</div>;
+  }
+
+  if (error) {
+    return <div className="p-4 text-red-500">Error loading customers: {error}</div>;
+  }
 
   if (selectedCustomer) {
     return (

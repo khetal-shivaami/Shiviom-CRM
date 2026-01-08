@@ -27,8 +27,7 @@ export const useTaskManager = (): TaskManagerReturn => {
         .from('tasks')
         .select(`
           *,
-          customer:customers(name, company),
-          partner:partners(name, company),
+          partner:partners!partner_id(name, company),
           assigned_user:profiles!tasks_assigned_to_fkey(first_name, last_name),
           created_user:profiles!tasks_assigned_by_fkey(first_name, last_name)
         `)
@@ -46,8 +45,10 @@ export const useTaskManager = (): TaskManagerReturn => {
         type: task.type as Task['type'],
         assignedTo: task.assigned_to,
         assignedBy: task.assigned_by,
-        customerId: task.customer_id,
+        customerId: task.portal_customer_id,
+        customerDomain: task.customer_domain,
         partnerId: task.partner_id,
+        portal_reseller_id: task.portal_reseller_id,
         dueDate: task.due_date ? new Date(task.due_date) : undefined,
         createdAt: new Date(task.created_at),
         updatedAt: task.updated_at ? new Date(task.updated_at) : undefined,

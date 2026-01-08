@@ -26,12 +26,20 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
  SET search_path = public
 AS $function$
 BEGIN
-  INSERT INTO public.profiles (user_id, email, first_name, last_name)
+  INSERT INTO public.profiles (user_id, email, first_name, last_name, role, department, phone, reporting_to)
   VALUES (
     NEW.id, 
     NEW.email,
     NEW.raw_user_meta_data->>'first_name',
-    NEW.raw_user_meta_data->>'last_name'
+    NEW.raw_user_meta_data->>'last_name',
+    NEW.raw_user_meta_data->>'role',
+    NEW.raw_user_meta_data->>'department',
+    NEW.raw_user_meta_data->>'phone',
+    (
+      SELECT id FROM public.profiles 
+      WHERE user_id = (NEW.raw_user_meta_data->>'reporting_to')::UUID
+      LIMIT 1
+    )
   );
   RETURN NEW;
 END;

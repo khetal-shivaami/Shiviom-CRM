@@ -9,7 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Mail, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Renewal, Customer, Partner, User } from '../types';
+import { Renewal, Customer, Partner, User, Product } from '../types';
+import { useAuth } from '@/contexts/AuthContext';
+import { API_ENDPOINTS } from '@/config/api';
 
 interface EmailTemplate {
   id: string;
@@ -23,6 +25,7 @@ interface RenewalEmailDialogProps {
   renewal: Renewal;
   customer: Customer;
   partner: Partner;
+  products: Product[];
   assignedEmployee?: User;
   children: React.ReactNode;
 }
@@ -31,6 +34,7 @@ const RenewalEmailDialog = ({
   renewal, 
   customer, 
   partner, 
+  products,
   assignedEmployee, 
   children 
 }: RenewalEmailDialogProps) => {
@@ -40,18 +44,18 @@ const RenewalEmailDialog = ({
     {
       id: '1',
       name: 'Standard Renewal',
-      subject: 'Renewal Reminder - {contractValue} Contract',
-      body: `Dear {customerName},
+      subject: 'Renewal Reminder - {customerName}',
+      body: `Dear {partnerName},
 
 I hope this email finds you well.
 
 We wanted to reach out regarding your upcoming software renewal scheduled for {renewalDate}.
 
-Contract Details:
-- Customer: {customerName}
-- Company: {customerCompany}
-- Partner: {partnerName}
-- Contract Value: {contractValue}
+Renewal Details:
+- Customer Domain: {customerName}
+- Partner Company: {customerCompany}
+- SKU Name: {skuName}
+- Renewal Price: {contractValue}
 - Renewal Date: {renewalDate}
 - Status: {status}
 
@@ -61,25 +65,24 @@ Please let us know if you have any questions or would like to schedule a call to
 
 Best regards,
 {employeeName}
-{employeeEmail}
 {employeePhone}`,
       isDefault: true
     },
     {
       id: '2',
       name: 'Urgent Renewal',
-      subject: 'URGENT: Renewal Required - {contractValue} Contract',
-      body: `Dear {customerName},
+      subject: 'URGENT: Renewal Required - {customerName}',
+      body: `Dear {partnerName},
 
 This is an urgent reminder regarding your software renewal.
 
 Your contract is due for renewal on {renewalDate}, and we need your immediate attention to avoid any service interruption.
 
-Contract Details:
-- Customer: {customerName}
-- Company: {customerCompany}
-- Partner: {partnerName}
-- Contract Value: {contractValue}
+Renewal Details:
+- Customer Domain: {customerName}
+- Partner Company: {customerCompany}
+- SKU Name: {skuName}
+- Renewal Price: {contractValue}
 - Renewal Date: {renewalDate}
 - Status: {status}
 
@@ -87,15 +90,14 @@ Please contact us immediately to process your renewal.
 
 Urgent regards,
 {employeeName}
-{employeeEmail}
 {employeePhone}`,
       isDefault: false
     },
     {
       id: '3',
       name: 'Friendly Follow-up',
-      subject: 'Just checking in - {contractValue} Renewal',
-      body: `Hi {customerName},
+      subject: 'Just checking in - {customerName} - Renewal',
+      body: `Hi {partnerName},
 
 I hope you're doing well! Just wanted to follow up on your upcoming renewal.
 
@@ -105,14 +107,13 @@ If you have any questions or would like to schedule a quick chat, just let me kn
 
 Thanks,
 {employeeName}
-{employeeEmail}
 {employeePhone}`,
       isDefault: false
     }
   ]);
 
   const [emailData, setEmailData] = useState({
-    to: customer.email,
+    to: partner.email,
     cc: assignedEmployee?.email || '',
     subject: '',
     body: ''
@@ -121,18 +122,20 @@ Thanks,
   const [ccInput, setCcInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { user, profile } = useAuth();
+  const renewalProduct = products.find(p => p.id === renewal.productId);
 
   const replacePlaceholders = (text: string) => {
     return text
-      .replace(/{customerName}/g, customer.name)
-      .replace(/{customerCompany}/g, customer.company)
+      .replace(/{customerName}/g, customer.domainName)
+      .replace(/{customerCompany}/g, partner.company)
       .replace(/{partnerName}/g, partner.name)
-      .replace(/{contractValue}/g, `$${renewal.contractValue.toLocaleString()}`)
+      .replace(/{contractValue}/g, `₹${renewal.contractValue.toLocaleString()}`)
       .replace(/{renewalDate}/g, renewal.renewalDate.toLocaleDateString())
       .replace(/{status}/g, renewal.status)
-      .replace(/{employeeName}/g, assignedEmployee?.name || 'Your Account Manager')
-      .replace(/{employeeEmail}/g, assignedEmployee?.email || '')
-      .replace(/{employeePhone}/g, assignedEmployee?.phone || '');
+      .replace(/{employeeName}/g,`${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'Your Account Manager')
+      .replace(/{employeePhone}/g, profile?.phone || '')
+      .replace(/{skuName}/g, renewalProduct?.name || 'Unknown Product');
   };
 
   const handleTemplateChange = (templateId: string) => {
@@ -154,8 +157,8 @@ Thanks,
       if (defaultTemplate) {
         setSelectedTemplate(defaultTemplate.id);
         setEmailData({
-          to: customer.email,
-          cc: assignedEmployee?.email || '',
+          to: partner.email,
+          cc: user?.email || '',
           subject: replacePlaceholders(defaultTemplate.subject),
           body: replacePlaceholders(defaultTemplate.body)
         });
@@ -177,23 +180,41 @@ Thanks,
   const handleSendEmail = async () => {
     setIsLoading(true);
     
+    const allCcs = [emailData.cc, ...additionalCCs].filter(Boolean); // Filter out any empty strings
+
     try {
-      console.log('Sending email with data:', {
-        ...emailData,
-        additionalCCs,
+      const templateName = templates.find(t => t.id === selectedTemplate)?.name;
+      const payload = {
+        to: emailData.to,
+        cc: allCcs,
+        subject: emailData.subject,
+        body: emailData.body,
         renewalId: renewal.id,
-        templateUsed: selectedTemplate
+        templateUsed: templateName,
+      };
+
+      const response = await fetch(API_ENDPOINTS.SEND_RENEWAL_NOTIFICATION_FRMCRM, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // If you use token-based auth, include the Authorization header
+          // 'Authorization': `Bearer ${user?.token}`, 
+        },
+        body: JSON.stringify(payload),
       });
 
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      if (!response.ok) {
+        throw new Error(`API call failed with status: ${response.status}`);
+      }
 
       toast({
         title: "Email Sent Successfully",
-        description: `Renewal notification sent to ${customer.name}`,
+        description: `Renewal notification sent to ${partner.name}.`,
       });
 
       setOpen(false);
     } catch (error) {
+      console.error("Failed to send email:", error);
       toast({
         title: "Error",
         description: "Failed to send email. Please try again.",
@@ -216,7 +237,7 @@ Thanks,
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mail size={20} />

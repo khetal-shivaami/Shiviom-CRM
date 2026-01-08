@@ -1,7 +1,10 @@
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { UserOptions } from 'jspdf-autotable';
 import { Customer, Partner, Product, User, Task } from '../types';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface ReportConfig {
   type: string;
@@ -19,8 +22,13 @@ export interface ReportData {
   tasks?: Task[];
 }
 
+// Extend jsPDF with the autoTable plugin
+interface jsPDFWithAutoTable extends jsPDF {
+  autoTable: (options: UserOptions) => jsPDF;
+}
+
 class ReportService {
-  generateReport(config: ReportConfig, data: ReportData): Promise<void> {
+  generateReport(config: ReportConfig, data: ReportData, userId: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         switch (config.format) {
@@ -31,16 +39,31 @@ class ReportService {
             this.generateExcel(config, data);
             break;
           case 'pdf':
-            this.generatePDF(config, data);
+            return this.generatePDF(config, data);
             break;
           default:
             throw new Error('Unsupported format');
         }
-        resolve();
+        // Log the report generation after it's created
+        this.logReportGeneration(config.type, config.format, userId).catch(err => {
+          console.error("Failed to log report generation:", err); // Log error but don't block user
+        });
+        // Resolve is handled by the PDF generation return for that case
       } catch (error) {
         reject(error);
       }
     });
+  }
+
+  private async logReportGeneration(reportId: string, format: string, userId: string) {
+    const { error } = await supabase
+      .from('report_logs')
+      .insert({
+        report_id: reportId,
+        format: format,
+        generated_by: userId
+      });
+    if (error) throw error;
   }
 
   private generateCSV(config: ReportConfig, data: ReportData) {
@@ -74,72 +97,63 @@ class ReportService {
     saveAs(blob, filename);
   }
 
-  private generatePDF(config: ReportConfig, data: ReportData) {
-    const doc = new jsPDF();
+  private generatePDF(config: ReportConfig, data: ReportData): Promise<void> {
+    const doc = new jsPDF() as jsPDFWithAutoTable;
     const processedData = this.processDataForReport(config, data);
-    
-    // Header
+
     doc.setFontSize(20);
     doc.text(this.getReportTitle(config.type), 20, 20);
-    
+
     doc.setFontSize(12);
     doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 35);
-    doc.text(`Date Range: ${config.dateRange || 'All time'}`, 20, 45);
-    
-    // Summary statistics
-    let yPosition = 60;
-    doc.setFontSize(14);
-    doc.text('Summary:', 20, yPosition);
-    yPosition += 15;
-    
-    doc.setFontSize(10);
-    doc.text(`Total Records: ${processedData.length}`, 20, yPosition);
-    yPosition += 10;
-    
-    // Add type-specific summary
-    if (config.type === 'tasks' && data.tasks) {
-      const completed = data.tasks.filter(t => t.status === 'completed').length;
-      const completion = data.tasks.length > 0 ? ((completed / data.tasks.length) * 100).toFixed(1) : '0';
-      doc.text(`Completion Rate: ${completion}%`, 20, yPosition);
-      yPosition += 10;
-    }
-    
-    // Table data (simplified for PDF)
-    yPosition += 10;
-    doc.setFontSize(12);
-    doc.text('Data:', 20, yPosition);
-    yPosition += 15;
-    
-    // Add table headers and first few rows
-    doc.setFontSize(8);
-    const headers = Object.keys(processedData[0] || {});
-    const maxRows = Math.min(processedData.length, 20); // Limit for PDF
-    
-    for (let i = 0; i < maxRows; i++) {
-      const row = processedData[i];
-      let xPosition = 20;
-      headers.forEach((header, index) => {
-        if (index < 4) { // Limit columns for PDF width
-          const value = String(row[header] || '').substring(0, 15);
-          doc.text(value, xPosition, yPosition);
-          xPosition += 40;
-        }
+
+    // Use autoTable for task-performance report
+    if (config.type === 'task-performance' && data.tasks && data.users) {
+      const userMap = new Map(data.users.map(user => [user.id, user.name || user.email]));
+
+      const head = [["Title", "Status", "Priority", "Due Date", "Created By", "Assigned To"]];
+      const body = data.tasks.map(task => [
+        task.title,
+        task.status,
+        task.priority,
+        task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A',
+        userMap.get(task.assignedBy) || task.assignedBy || 'Unknown',
+        userMap.get(task.assignedTo) || task.assignedTo || 'Unassigned'
+      ]);
+
+      doc.autoTable({
+        head: head,
+        body: body,
+        startY: 45,
+        headStyles: { fillColor: [22, 160, 133] }, // Theme color
+        styles: { fontSize: 8 },
       });
-      yPosition += 8;
-      
-      if (yPosition > 280) { // Page break
-        doc.addPage();
-        yPosition = 20;
+    } else {
+      // Fallback to original simplified PDF generation for other reports
+      doc.text(`Date Range: ${config.dateRange || 'All time'}`, 20, 45);
+      let yPosition = 60;
+      doc.setFontSize(14);
+      doc.text('Summary:', 20, yPosition);
+      yPosition += 15;
+      doc.setFontSize(10);
+      doc.text(`Total Records: ${processedData.length}`, 20, yPosition);
+      yPosition += 10;
+
+      if (processedData.length > 0) {
+        const headers = Object.keys(processedData[0]);
+        const body = processedData.map(row => headers.map(header => String(row[header] || '')));
+        doc.autoTable({
+          head: [headers],
+          body: body,
+          startY: yPosition,
+        });
       }
     }
     
-    if (processedData.length > 20) {
-      yPosition += 10;
-      doc.text(`... and ${processedData.length - 20} more records`, 20, yPosition);
-    }
-    
-    const filename = this.generateFilename(config, 'pdf');
-    doc.save(filename);
+    return new Promise((resolve) => {
+      doc.output('dataurlnewwindow');
+      resolve();
+    });
   }
 
   private processDataForReport(config: ReportConfig, data: ReportData): any[] {
@@ -253,7 +267,7 @@ class ReportService {
       Type: task.type,
       Priority: task.priority,
       Status: task.status,
-      'Assigned To': task.assignedTo || 'Unassigned',
+      'Assigned To ID': task.assignedTo || 'Unassigned',
       'Customer ID': task.customerId || 'N/A',
       'Partner ID': task.partnerId || 'N/A',
       'Due Date': task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A',

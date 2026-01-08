@@ -9,10 +9,10 @@ import PlanManagementDialog from './PlanManagementDialog';
 interface ProductDetailProps {
   product: Product;
   onBack: () => void;
-  onProductUpdate?: (productId: string, updates: Partial<Product>) => void;
+  onDataRefresh: () => void;
 }
 
-const ProductDetail = ({ product, onBack, onProductUpdate }: ProductDetailProps) => {
+const ProductDetail = ({ product, onBack, onDataRefresh }: ProductDetailProps) => {
   const getBillingBadgeColor = (billing: string) => {
     switch (billing) {
       case 'monthly': return 'bg-blue-100 text-blue-800';
@@ -27,12 +27,6 @@ const ProductDetail = ({ product, onBack, onProductUpdate }: ProductDetailProps)
       case 'active': return 'bg-green-100 text-green-800';
       case 'inactive': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const handleProductUpdate = (productId: string, updates: Partial<Product>) => {
-    if (onProductUpdate) {
-      onProductUpdate(productId, updates);
     }
   };
 
@@ -94,21 +88,19 @@ const ProductDetail = ({ product, onBack, onProductUpdate }: ProductDetailProps)
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Available Plans ({plans.length})</h2>
-          {onProductUpdate && (
-            <PlanManagementDialog
-              product={product}
-              onUpdateProduct={handleProductUpdate}
-              trigger={
-                <Button
-                  variant="outline"
-                  disabled={isInactive}
-                >
-                  <Edit2 size={14} className="mr-2" />
-                  Manage Plans
-                </Button>
-              }
-            />
-          )}
+          <PlanManagementDialog
+            product={product}
+            onSuccess={onDataRefresh}
+            trigger={
+              <Button
+                variant="outline"
+                disabled={isInactive}
+              >
+                <Edit2 size={14} className="mr-2" />
+                Manage Plans
+              </Button>
+            }
+          />
         </div>
         {plans.length === 0 ? (
           <Card>
@@ -128,7 +120,12 @@ const ProductDetail = ({ product, onBack, onProductUpdate }: ProductDetailProps)
                 <CardHeader>
                   <CardTitle className="text-lg">{plan.name}</CardTitle>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold">₹{plan.price.toFixed(2)}</span>
+                    <span className="text-2xl font-bold">
+                      ₹{plan.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {plan.renewalPrice && plan.renewalPrice !== plan.price && (
+                        <span className="text-sm font-normal text-muted-foreground ml-2">(renews at ₹{plan.renewalPrice.toFixed(2)})</span>
+                      )}
+                    </span>
                     <span className="text-sm text-muted-foreground">per user</span>
                     <Badge className={getBillingBadgeColor(plan.billing)} variant="secondary">
                       {plan.billing}

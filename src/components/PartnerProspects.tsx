@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,30 +8,32 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Search, Edit, Plus, ArrowLeft } from 'lucide-react';
-import { Customer, Partner, Product, User } from '../types';
+import { Customer } from '@/types/customer';
+import { Partner, Product, User } from '../types';
 import CustomerDetail from './CustomerDetail';
 import CustomerTableFilters from './CustomerTableFilters';
 import CustomerForm from './CustomerForm';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface PartnerProspectsProps {
-  customers: Customer[];
   partners: Partner[];
   products: Product[];
   users: User[];
   onCustomerUpdate?: (customerId: string, updates: Partial<Customer>) => void;
   onBulkAction?: (customerIds: string[], action: string) => void;
-  onCustomerAdd?: (customer: Customer) => void;
 }
 
 const PartnerProspects = ({ 
-  customers, 
   partners, 
   products, 
   users,
-  onCustomerUpdate, 
-  onBulkAction,
-  onCustomerAdd 
+  onCustomerUpdate,
+  onBulkAction
 }: PartnerProspectsProps) => {
+  const { toast } = useToast();
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [processFilter, setProcessFilter] = useState('all');
@@ -40,6 +42,77 @@ const PartnerProspects = ({
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  const fetchCustomers = async () => {
+    setLoading(true);
+    try {
+      // Fetch customers and products in parallel for efficiency
+      const customerPromise = supabase
+        .from('customers')
+        .select('*, partners(name)')
+        .order('created_at', { ascending: false });
+
+      const productPromise = supabase.from('products').select('id, name');
+
+      const [
+        { data: customerData, error: customerError },
+        { data: productData, error: productError }
+      ] = await Promise.all([customerPromise, productPromise]);
+
+      if (customerError) throw customerError;
+      if (productError) throw productError;
+
+      // Create a map for quick product name lookups
+      const productMap = new Map(productData.map((p) => [p.id, p.name]));
+      const getProductNamesFromIds = (ids: string[] | null): string[] => {
+        if (!ids) return [];
+        return ids.map((id) => productMap.get(id)).filter((name): name is string => !!name);
+      };
+
+      const transformedData: Customer[] = customerData.map((item: any) => {
+        let productNames: string[] = [];
+        if (item.deal_products && Array.isArray(item.deal_products)) {
+          productNames = item.deal_products
+            .map((dealProduct: { productName?: string }) => dealProduct.productName)
+            .filter((name): name is string => !!name);
+        } else if (item.product_ids) {
+          productNames = getProductNamesFromIds(item.product_ids);
+        }
+
+        return {
+          id: item.id,
+          name: item.name,
+          email: item.email,
+          phone: item.phone,
+          company: item.company,
+          customer_domain: item.customer_domain,
+          status: item.status,
+          process: item.process,
+          value: item.value,
+          zone: item.zone,
+          partnerId: item.partner_id, // Supabase field name
+          productIds: item.product_ids,
+          assignedUserIds: item.assigned_user_ids,
+          createdAt: new Date(item.created_at),
+          deal_products: item.deal_products, // Keep the full deal_products object
+          // Add derived properties for display
+          productNames: productNames,
+          partnerName: item.partners?.name, // From the join
+          lastEdited: item.last_edited ? new Date(item.last_edited) : undefined,
+        };
+      });
+      console.log(transformedData)
+      setCustomers(transformedData);
+    } catch (error: any) {
+      toast({ title: "Error fetching prospects", description: error.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
 
   // Filter for prospects only (not won or deployment)
   const prospects = useMemo(() => {
@@ -52,7 +125,8 @@ const PartnerProspects = ({
     return prospects.filter(customer => {
       const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           customer.company.toLowerCase().includes(searchTerm.toLowerCase());
+                           customer.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (customer.customer_domain && customer.customer_domain.toLowerCase().includes(searchTerm.toLowerCase()));
       
       const matchesStatus = statusFilter === 'all' || customer.status === statusFilter;
       const matchesProcess = processFilter === 'all' || customer.process === processFilter;
@@ -102,28 +176,16 @@ const PartnerProspects = ({
     setShowAddForm(false);
   };
 
-  const handleCustomerAdd = (customer: Customer) => {
-    onCustomerAdd?.(customer);
+  const handleCustomerAdded = () => {
     setShowAddForm(false);
+    fetchCustomers();
   };
 
-  const handleCustomerUpdate = (customerId: string, updates: Partial<Customer>) => {
-    const updatedCustomer = { ...updates, lastEdited: new Date() };
-    onCustomerUpdate?.(customerId, updatedCustomer);
-  };
-
-  const getPartnerName = (partnerId?: string) => {
-    const partner = partners.find(p => p.id === partnerId);
-    return partner ? partner.name : 'Unassigned';
-  };
-
-  const getProductNames = (productIds?: string[]) => {
-    if (!productIds || productIds.length === 0) return 'None';
-    return productIds
-      .map(id => products.find(p => p.id === id)?.name)
-      .filter(Boolean)
-      .slice(0, 2)
-      .join(', ') + (productIds.length > 2 ? ` +${productIds.length - 2}` : '');
+  const handleCustomerUpdate = (updatedCustomer: Customer) => {
+    // Update the list of customers
+    setCustomers(prev => prev.map(c => (c.id === updatedCustomer.id ? updatedCustomer : c)));
+    // Update the selected customer to reflect changes immediately in the detail view
+    setSelectedCustomer(updatedCustomer);
   };
 
   const getStatusColor = (status: string) => {
@@ -199,10 +261,9 @@ const PartnerProspects = ({
             <p className="text-muted-foreground">Create a new prospect record</p>
           </div>
         </div>
-        <CustomerForm 
-          partners={partners} 
-          products={products} 
-          onCustomerAdd={handleCustomerAdd} 
+        <CustomerForm
+          onSuccess={handleCustomerAdded}
+          onCancel={handleBackToProspectList}
         />
       </div>
     );
@@ -360,6 +421,7 @@ const PartnerProspects = ({
                 </TableHead>
                 <TableHead>Prospect</TableHead>
                 <TableHead>Company</TableHead>
+                <TableHead>Domain</TableHead>
                 <TableHead>Partner</TableHead>
                 <TableHead>Zone</TableHead>
                 <TableHead>Products</TableHead>
@@ -379,13 +441,13 @@ const PartnerProspects = ({
                     />
                   </TableCell>
                   <TableCell onClick={() => handleCustomerClick(customer)} className="cursor-pointer">
-                    <div>
+                    <div className="min-w-0">
                       <div className="font-medium">{customer.name}</div>
                       <div className="text-sm text-muted-foreground">{customer.email}</div>
                     </div>
                   </TableCell>
                   <TableCell onClick={() => handleCustomerClick(customer)} className="cursor-pointer">{customer.company}</TableCell>
-                  <TableCell onClick={() => handleCustomerClick(customer)} className="cursor-pointer">{getPartnerName(customer.partnerId)}</TableCell>
+                  <TableCell onClick={() => handleCustomerClick(customer)} className="cursor-pointer">{customer.customer_domain}</TableCell>                  <TableCell onClick={() => handleCustomerClick(customer)} className="cursor-pointer">{customer.partnerName || 'Unassigned'}</TableCell>
                   <TableCell onClick={() => handleCustomerClick(customer)} className="cursor-pointer">
                     {customer.zone ? (
                       <Badge className={getZoneColor(customer.zone)}>
@@ -396,7 +458,7 @@ const PartnerProspects = ({
                     )}
                   </TableCell>
                   <TableCell onClick={() => handleCustomerClick(customer)} className="cursor-pointer max-w-xs truncate">
-                    {getProductNames(customer.productIds)}
+                    {(customer as any).productNames?.join(', ') || 'None'}
                   </TableCell>
                   <TableCell onClick={() => handleCustomerClick(customer)} className="cursor-pointer">
                     {customer.process ? (

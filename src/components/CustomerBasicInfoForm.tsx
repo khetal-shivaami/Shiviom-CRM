@@ -8,14 +8,15 @@ interface CustomerBasicInfoFormProps {
     email: string;
     phone: string;
     company: string;
+    customer_domain: string;
   };
-  onChange: (field: string, value: string) => void;
+  onChange: (field: keyof CustomerBasicInfoFormProps['formData'], value: string) => void;
 }
 
 const CustomerBasicInfoForm = ({ formData, onChange }: CustomerBasicInfoFormProps) => {
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="space-y-2">
           <Label htmlFor="name">Full Name *</Label>
           <Input
@@ -38,9 +39,7 @@ const CustomerBasicInfoForm = ({ formData, onChange }: CustomerBasicInfoFormProp
             required
           />
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="phone">Phone Number</Label>
           <Input
@@ -58,6 +57,16 @@ const CustomerBasicInfoForm = ({ formData, onChange }: CustomerBasicInfoFormProp
             value={formData.company}
             onChange={(e) => onChange('company', e.target.value)}
             placeholder="Enter company name"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="customer_domain">Customer Domain *</Label>
+          <Input
+            id="customer_domain"
+            value={formData.customer_domain}
+            onChange={(e) => onChange('customer_domain', e.target.value)}
+            placeholder="Enter customer domain"
             required
           />
         </div>

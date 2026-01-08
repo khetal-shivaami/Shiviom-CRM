@@ -1,0 +1,681 @@
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; 
+import { Progress } from '@/components/ui/progress';
+import { Search, UserPlus, Filter, CheckCircle, Clock, AlertCircle, Eye, Users, FileText, Handshake, Shield, PenTool, Trophy, Link, KeyRound, X, Edit } from 'lucide-react';
+import { Partner, User, OnboardingStage, PartnerOnboardingData } from '@/types';
+import AddPartnerForm from '@/components/AddPartnerForm';
+import PartnerOnboardingDetail from '@/components/PartnerOnboardingDetail';
+import { EditPartnerDialog } from '@/components/EditPartnerDialog';
+import { PartnerStageEditForm } from '@/components/PartnerStageEditForm';
+import { useTaskManager } from '@/hooks/useTaskManager';
+import TaskNavigationBanner from '@/components/TaskNavigationBanner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { API_ENDPOINTS } from '@/config/api';
+import { useToast } from '@/hooks/use-toast';
+
+interface PartnerOnboardingProps {
+  users: User[];
+  onNavigateToTasks?: (partnerId?: string) => void;
+}
+
+interface EnhancedPartner extends Partner {
+  onboarding: PartnerOnboardingData;
+}
+
+const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps) => {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [stageFilter, setStageFilter] = useState('all');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
+  const [editingPartner, setEditingPartner] = useState<EnhancedPartner | null>(null);
+  const [partnersData, setPartnersData] = useState<EnhancedPartner[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 20;
+  const { getOnboardingTasks } = useTaskManager();
+
+  const stageConfig = {
+    'outreach': { title: 'Outreach', icon: Users, color: 'bg-blue-500' },
+    'product-overview': { title: 'Product Overview', icon: FileText, color: 'bg-purple-500' },
+    'partner-program': { title: 'Partner Program', icon: Handshake, color: 'bg-green-500' },
+    'portal-activation': { title: 'Portal Activation', icon: KeyRound, color: 'bg-cyan-500' },
+    'kyc': { title: 'KYC', icon: Shield, color: 'bg-yellow-500' },
+    'agreement': { title: 'Agreement', icon: PenTool, color: 'bg-orange-500' },
+    'onboarded': { title: 'Onboarded', icon: Trophy, color: 'bg-emerald-500' }
+  };
+
+  // Generate mock onboarding data with 7-stage system
+  const generateMockOnboardingData = (partner: Partner, dbStage?: OnboardingStage): PartnerOnboardingData => {
+    const stages: OnboardingStage[] = ['outreach', 'product-overview', 'partner-program', 'portal-activation', 'kyc', 'agreement', 'onboarded'];
+    
+    // Use the database stage if provided and valid, otherwise pick a random one as a fallback.
+    const currentStage = dbStage && stages.includes(dbStage) 
+      ? dbStage 
+      : stages[Math.floor(Math.random() * stages.length)];
+
+    const currentStageIndex = stages.indexOf(currentStage);
+      const progress = Math.round(((currentStageIndex + 1) / stages.length) * 100);
+    
+    return {
+      currentStage,
+      overallProgress: progress,
+      completionPercentage: progress,
+      startedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
+      expectedCompletionDate: new Date(Date.now() + Math.random() * 20 * 24 * 60 * 60 * 1000),
+      lastActivity: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
+      stages: Object.fromEntries(
+        stages.map((stage, index) => [
+          stage,
+          {
+            stage,
+            status: index < currentStageIndex ? 'completed' : 
+                   index === currentStageIndex ? (Math.random() > 0.3 ? 'in-progress' : 'blocked') : 'pending',
+            startedAt: index <= currentStageIndex ? new Date(Date.now() - (stages.length - index) * 3 * 24 * 60 * 60 * 1000) : undefined,
+            completedAt: index < currentStageIndex ? new Date(Date.now() - (stages.length - index - 1) * 3 * 24 * 60 * 60 * 1000) : undefined,
+            assignedTo: ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson'][Math.floor(Math.random() * 4)],
+            tasks: [
+              { id: `${stage}-1`, title: `${stageConfig[stage].title} Task 1`, completed: index < currentStageIndex, required: true },
+              { id: `${stage}-2`, title: `${stageConfig[stage].title} Task 2`, completed: index < currentStageIndex, required: true },
+              { id: `${stage}-3`, title: `${stageConfig[stage].title} Task 3`, completed: false, required: false }
+            ]
+          }
+        ])
+      ) as Record<OnboardingStage, any>
+    };
+  };
+
+  const logCrmAction = async (actiontype: string, details: string) => {
+    if (!user?.id) {
+      console.error("User ID not available for logging CRM action.");
+      return;
+    }
+    try {
+      const formData = new FormData();
+      formData.append('userid', user.id);
+      formData.append('actiontype', actiontype);
+      formData.append('path', 'Partner Onboarding');
+      formData.append('details', details);
+
+      const response = await fetch(API_ENDPOINTS.STORE_INSERT_CRM_LOGS, {
+        method: 'POST',
+        body: formData,
+      });
+      console.log(response)
+      if (!response.ok) {
+        const errorResult = await response.json().catch(() => ({ message: `CRM log API request failed with status ${response.status}` }));
+        throw new Error(errorResult.message);
+      }
+
+    } catch (error: any) {
+      console.error("Error logging CRM action:", error.message);
+    }
+  };
+
+  const fetchPartners = async () => {
+    setIsLoading(true);
+    try {
+      let allPartners: any[] = [];
+      const CHUNK_SIZE = 1000;
+      let page = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const from = page * CHUNK_SIZE;
+        const to = from + CHUNK_SIZE - 1;
+
+        const { data, error } = await supabase
+          .from('partners')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (error) throw error;
+
+        if (data) {
+          allPartners = [...allPartners, ...data];
+        }
+
+        if (!data || data.length < CHUNK_SIZE) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+
+      const enhancedPartners: EnhancedPartner[] = allPartners.map((p: any) => {
+        const partnerBase: Omit<Partner, 'onboarding'> = {
+          id: p.id,
+          name: p.name,
+          email: p.email,
+          company: p.company,
+          phone: p.contact_number,
+          specialization: p.specialization,
+          identity: p.identity,
+          status: p.status,
+          agreementSigned: p.agreement_signed,
+          agreementDate: p.agreement_date ? new Date(p.agreement_date) : undefined,
+          productTypes: p.product_types || [],
+          paymentTerms: p.payment_terms,
+          zone: p.zone,
+          assignedUserIds: p.assigned_user_ids || [],
+          createdAt: new Date(p.created_at),
+          customersCount: p.customers_count || 0,
+          newRevenue: p.new_revenue || 0,
+          renewalRevenue: p.renewal_revenue || 0,
+          totalValue: p.total_value || 0,
+          portal_reseller_id: p.portal_reseller_id,
+          contact_number: p.contact_number,
+          stage_owner: p.stage_owner,
+        };
+
+        const onboardingData = p.onboarding_data ? { ...p.onboarding_data, currentStage: p.onboarding_stage } : generateMockOnboardingData(partnerBase as Partner, p.onboarding_stage);
+        return { ...partnerBase, onboarding: onboardingData };
+      });
+      setPartnersData(enhancedPartners);
+
+    } catch (error: any) {
+      toast({ title: "Error fetching partners", description: error.message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPartners();
+  }, []);
+
+  useEffect(() => {
+    // Reset to first page when filters change
+    setCurrentPage(1);
+  }, [searchTerm, stageFilter]);
+
+  const handlePartnerUpdate = async (updatedPartner: EnhancedPartner) => {
+    if (!updatedPartner.onboarding) {
+      toast({
+        title: "Update Error",
+        description: "No onboarding data found for this partner.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newStage = updatedPartner.onboarding.currentStage;
+    const partnerId = updatedPartner.id;
+
+    // Find the original partner to get the 'from' stage
+    const originalPartner = partnersData.find(p => p.id === partnerId);
+    if (!originalPartner || !originalPartner.onboarding) {
+      toast({
+        title: "Update Error",
+        description: "Could not find original partner data to track stage change.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const fromStage = originalPartner.onboarding.currentStage;
+
+    // If stage hasn't changed, do nothing.
+    if (fromStage === newStage) {
+      return;
+    }
+
+    // Optimistically update the UI
+    setPartnersData(prev => 
+      prev.map(p => 
+        p.id === partnerId 
+          ? updatedPartner
+          : p
+      )
+    );
+
+    // Persist the change to the database
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      const { error } = await supabase
+        .from('partners')
+        .update({ onboarding_stage: newStage })
+        .eq('id', partnerId);
+
+      if (error) throw error;
+
+      // Insert into partner_stage_changes table
+      const { error: insertError } = await supabase
+        .from('partner_stage_changes')
+        .insert({
+          partner_id: partnerId,
+          from_stage: fromStage,
+          to_stage: newStage,
+          changed_by: user.id,
+          portal_reseller_id: originalPartner.portal_reseller_id || null,
+        })
+        .select(); // Ensure the insert operation is executed and returns data
+
+      if (insertError) throw insertError;
+
+      // Log success and show toast
+      const successLogDetails = `Successfully changed partner ${updatedPartner.name} (ID: ${partnerId}) stage from ${fromStage} to ${newStage}.`;
+      await logCrmAction("Update Partner Onboarding Stage", successLogDetails);
+      toast({ title: "Stage Updated", description: `Partner stage changed to ${stageConfig[newStage].title}.` });
+
+    } catch (error: any) {
+       await logCrmAction("Update Partner Onboarding Stage", `Failed to change partner ${updatedPartner.name} stage from ${fromStage} to ${newStage}. Error: ${error.message}`);
+      toast({ title: "Database Update Failed", description: `Could not save stage for ${updatedPartner.name}. ${error.message}`, variant: "destructive" });
+      // Optional: Revert UI change by refetching data
+      fetchPartners();
+    }
+  };
+
+  const handleAddPartnerSuccess = () => {
+    setShowAddForm(false);
+    fetchPartners();
+  };
+
+  const handleEditPartner = (partner: EnhancedPartner) => {
+    setEditingPartner(partner);
+  };
+
+  const getStageIcon = (stage: OnboardingStage) => {
+    const config = stageConfig[stage];
+    const IconComponent = config.icon;
+    return <IconComponent className="h-4 w-4" />;
+  };
+
+  const getStageStatus = (partner: EnhancedPartner) => {
+    const currentStageData = partner.onboarding.stages[partner.onboarding.currentStage];
+    return currentStageData.status;
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'in-progress':
+        return <Clock className="h-4 w-4 text-blue-500" />;
+      case 'blocked':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-yellow-500" />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-green-500';
+      case 'in-progress':
+        return 'bg-blue-500';
+      case 'blocked':
+        return 'bg-red-500';
+      default:
+        return 'bg-yellow-500';
+    }
+  };
+
+  const filteredPartners = partnersData.filter(partner => {
+    // Exclude 'onboarded' partners from the default "All Stages" view.
+    // They will only appear if the 'onboarded' filter is explicitly selected.
+    if (stageFilter === 'all' && partner.onboarding.currentStage === 'onboarded') {
+      return false;
+    }
+
+    const matchesSearch = partner.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         partner.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         partner.company.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStage = stageFilter === 'all' || partner.onboarding.currentStage === stageFilter;
+    return matchesSearch && matchesStage;
+  });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredPartners.length / recordsPerPage);
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentRecords = filteredPartners.slice(indexOfFirstRecord, indexOfLastRecord);
+
+  const paginationControls = (
+    <div className="flex items-center justify-between">
+      <div className="text-sm text-muted-foreground">
+        Showing <strong>{filteredPartners.length > 0 ? indexOfFirstRecord + 1 : 0}</strong> to <strong>{Math.min(indexOfLastRecord, filteredPartners.length)}</strong> of <strong>{filteredPartners.length}</strong> partners.
+      </div>
+      <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages > 0 ? totalPages : 1}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages || totalPages === 0}
+          >
+            Next
+          </Button>
+      </div>
+    </div>
+  );
+  const statsData = [
+    {
+      title: 'Total Partners',
+      value: partnersData.filter(p => p.onboarding.currentStage !== 'onboarded').length,
+      color: 'text-blue-600',
+      icon: Users
+    },
+    {
+      title: 'Outreach',
+      value: partnersData.filter(p => p.onboarding.currentStage === 'outreach').length,
+      color: 'text-blue-600',
+      icon: Users
+    },
+    {
+      title: 'Product Overview',
+      value: partnersData.filter(p => p.onboarding.currentStage === 'product-overview').length,
+      color: 'text-purple-600',
+      icon: FileText
+    },
+    {
+      title: 'Partner Program',
+      value: partnersData.filter(p => p.onboarding.currentStage === 'partner-program').length,
+      color: 'text-green-600',
+      icon: Handshake
+    },
+    {
+      title: 'Portal Activation',
+      value: partnersData.filter(p => p.onboarding.currentStage === 'portal-activation').length,
+      color: 'text-cyan-600',
+      icon: KeyRound
+    },
+    {
+      title: 'KYC',
+      value: partnersData.filter(p => p.onboarding.currentStage === 'kyc').length,
+      color: 'text-yellow-600',
+      icon: Shield
+    },
+    {
+      title: 'Agreement',
+      value: partnersData.filter(p => p.onboarding.currentStage === 'agreement').length,
+      color: 'text-orange-600',
+      icon: PenTool
+    },
+    {
+      title: 'Onboarded',
+      value: partnersData.filter(p => p.onboarding.currentStage === 'onboarded').length,
+      color: 'text-emerald-600',
+      icon: Trophy
+    }
+  ];
+
+  const avgProgress = filteredPartners.length > 0 
+    ? Math.round(filteredPartners.reduce((sum, p) => sum + p.onboarding.overallProgress, 0) / filteredPartners.length)
+    : 0;
+
+  if (selectedPartner) {
+    return (
+      <PartnerOnboardingDetail
+        partner={selectedPartner}
+        users={users}
+        onBack={() => setSelectedPartner(null)}
+        onNavigateToTasks={onNavigateToTasks}
+      />
+    );
+  }
+
+  if (showAddForm) {
+    return (
+      <div className="space-y-6">
+        <AddPartnerForm 
+          users={users}
+          onSuccess={handleAddPartnerSuccess}
+          onCancel={() => setShowAddForm(false)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {editingPartner && (
+        <EditPartnerDialog
+          partner={editingPartner}
+          users={users}
+          open={!!editingPartner}
+          onOpenChange={(isOpen) => !isOpen && setEditingPartner(null)}
+          onSuccess={() => {
+            setEditingPartner(null);
+            fetchPartners();
+          }}
+          onLogAction={logCrmAction}
+        />
+      )}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Partner Onboarding</h2>
+          <p className="text-muted-foreground">
+            Track and manage partner onboarding process
+          </p>
+        </div>
+        <div className="flex space-x-2">
+          <Button onClick={() => setShowAddForm(true)}>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Add Partner
+          </Button>
+        </div>
+      </div>
+
+      {/* Show banner for partners with onboarding tasks */}
+      {filteredPartners.length > 0 && (
+        <TaskNavigationBanner
+          onboardingTasks={filteredPartners.flatMap(partner => getOnboardingTasks(partner.id))}
+          onNavigateToTasks={() => onNavigateToTasks?.()}
+          showOnPartnerOnboarding={true}
+        />
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-9 gap-4">
+        {statsData.map((stat) => {
+          const IconComponent = stat.icon;
+          return (
+            <Card key={stat.title}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                <IconComponent className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
+              </CardContent>
+            </Card>
+          );
+        })}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg Progress</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-600">{avgProgress}%</div>
+            <Progress value={avgProgress} className="mt-2" />
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center space-x-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search partners..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 pr-8"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setSearchTerm('')}
+                >
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              )}
+            </div>
+            <Select value={stageFilter} onValueChange={setStageFilter}>
+              <SelectTrigger className="w-[200px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filter by Stage" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Stages</SelectItem>
+                <SelectItem value="outreach">Outreach</SelectItem>
+                <SelectItem value="product-overview">Product Overview</SelectItem>
+                <SelectItem value="partner-program">Partner Program</SelectItem>
+                <SelectItem value="portal-activation">Portal Activation</SelectItem>
+                <SelectItem value="agreement">Agreement</SelectItem>
+                <SelectItem value="kyc">KYC</SelectItem>
+                <SelectItem value="onboarded">Onboarded</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="pb-4">
+            {paginationControls}
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Partner</TableHead>
+                <TableHead>Current Stage</TableHead>
+                <TableHead>Progress</TableHead>
+                <TableHead>Stage Owner</TableHead>
+                <TableHead>Last Activity</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-24 text-center">
+                    Loading partners...
+                  </TableCell>
+                </TableRow>
+              ) : currentRecords.map((partner) => {
+                  const stageOwner = users.find(u => u.id === partner.stage_owner);
+                  const currentStageData = partner.onboarding.stages[partner.onboarding.currentStage];
+                  const stageConfig = {
+                    'outreach': { title: 'Outreach', icon: Users },
+                    'product-overview': { title: 'Product Overview', icon: FileText },
+                    'partner-program': { title: 'Partner Program', icon: Handshake },
+                    'portal-activation': { title: 'Portal Activation', icon: KeyRound },
+                    'kyc': { title: 'KYC', icon: Shield },
+                    'agreement': { title: 'Agreement', icon: PenTool },
+                    'onboarded': { title: 'Onboarded', icon: Trophy }
+                  };
+                  
+                  return (
+                    <TableRow 
+                      key={partner.id} 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setSelectedPartner(partner)}
+                    >
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{partner.name}</div>
+                          <div className="text-sm text-muted-foreground">{partner.company}</div>
+                          <div className="text-xs text-muted-foreground">{partner.email}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          {getStageIcon(partner.onboarding.currentStage)}
+                          <div>
+                            <div className="font-medium text-sm">
+                              {stageConfig[partner.onboarding.currentStage].title}
+                            </div>
+                            {/* <Badge 
+                              variant="outline" 
+                              className={`text-xs ${getStatusColor(currentStageData.status)} text-white border-0`}
+                            >
+                              {currentStageData.status.replace('-', ' ')}
+                            </Badge> */}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div className="text-sm font-medium">{partner.onboarding.overallProgress}%</div>
+                          <Progress value={partner.onboarding.overallProgress} className="w-16 h-2" />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">{stageOwner?.name || 'Unassigned'}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {partner.onboarding.lastActivity.toLocaleDateString()}
+                        </div>
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center space-x-2">
+                          <PartnerStageEditForm partner={partner} onUpdate={handlePartnerUpdate} />
+                          {/* <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditPartner(partner)}
+                            title="Edit Partner Details"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button> */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditPartner(partner)}
+                            title="Edit Partner Details"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {/* <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => {
+                              // Show onboarding tasks for this partner
+                              const tasks = getOnboardingTasks(partner.id);
+                              console.log(`${tasks.length} onboarding tasks for ${partner.name}`);
+                            }}
+                            title="View related tasks"
+                          >
+                            <Link className="h-4 w-4" />
+                          </Button> */}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+            </TableBody>
+          </Table>
+          <div className="pt-4">
+            {paginationControls}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default PartnerOnboarding;

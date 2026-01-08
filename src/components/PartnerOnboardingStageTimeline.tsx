@@ -1,13 +1,15 @@
+import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { CheckCircle, Circle, Clock, AlertCircle, FileText, Handshake, Users, Shield, PenTool, Trophy } from 'lucide-react';
-import { OnboardingStage, OnboardingStageData } from '@/types';
+import { FileText, Handshake, Users, Shield, PenTool, Trophy, KeyRound } from 'lucide-react';
+import { OnboardingStage, OnboardingStageData, User } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface PartnerOnboardingStageTimelineProps {
   stages: Record<OnboardingStage, OnboardingStageData>;
   currentStage: OnboardingStage;
-  overallProgress: number;
+  stageOwnerId?: string | null;
+  users: User[];
 }
 
 const stageConfig = {
@@ -29,6 +31,12 @@ const stageConfig = {
     icon: Handshake,
     color: 'hsl(var(--accent))'
   },
+  'portal-activation': {
+    title: 'Portal Activation',
+    description: 'Partner portal access and setup',
+    icon: KeyRound,
+    color: 'hsl(var(--info))'
+  },
   'kyc': {
     title: 'KYC',
     description: 'Documentation, verification, and compliance',
@@ -49,150 +57,98 @@ const stageConfig = {
   }
 } as const;
 
-const stageOrder: OnboardingStage[] = ['outreach', 'product-overview', 'partner-program', 'kyc', 'agreement', 'onboarded'];
+const stageOrder: OnboardingStage[] = ['outreach', 'product-overview', 'partner-program', 'portal-activation', 'agreement', 'kyc', 'onboarded'];
 
-const PartnerOnboardingStageTimeline = ({ stages, currentStage, overallProgress }: PartnerOnboardingStageTimelineProps) => {
-  const getStageIcon = (stage: OnboardingStage, stageData: OnboardingStageData) => {
-    const config = stageConfig[stage];
-    const IconComponent = config.icon;
-    
-    switch (stageData.status) {
-      case 'completed':
-        return <CheckCircle className="h-6 w-6 text-green-500" />;
-      case 'in-progress':
-        return <Clock className="h-6 w-6 text-blue-500" />;
-      case 'blocked':
-        return <AlertCircle className="h-6 w-6 text-red-500" />;
-      default:
-        return <Circle className="h-6 w-6 text-muted-foreground" />;
-    }
-  };
+const PartnerOnboardingStageTimeline = ({ stages, currentStage, stageOwnerId, users }: PartnerOnboardingStageTimelineProps) => {
+  const currentStageData = stages[currentStage];
+  const currentStageConfig = stageConfig[currentStage];
+  const currentStageIndex = stageOrder.indexOf(currentStage);
 
-  const getStageProgress = (stageData: OnboardingStageData) => {
-    if (stageData.status === 'completed') return 100;
-    if (stageData.status === 'pending') return 0;
-    
-    const completedTasks = stageData.tasks.filter(task => task.completed).length;
-    const totalTasks = stageData.tasks.length;
-    return totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  };
-
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'default';
-      case 'in-progress':
-        return 'secondary';
-      case 'blocked':
-        return 'destructive';
-      default:
-        return 'outline';
-    }
+  const getStageOwnerName = () => {
+    if (!stageOwnerId) return 'Unassigned';
+    const owner = users.find(u => u.id === stageOwnerId);
+    return owner ? owner.name : 'Unknown Owner';
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          Onboarding Progress
-          <div className="text-sm font-normal text-muted-foreground">
-            {overallProgress}% Complete
+    <div className="space-y-6">
+      {/* Current Stage Details Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Current Stage</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-primary`}>
+              <currentStageConfig.icon className="h-6 w-6 text-primary-foreground" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold">{currentStageConfig.title}</h3>
+            </div>
           </div>
-        </CardTitle>
-        <Progress value={overallProgress} className="w-full" />
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {stageOrder.map((stage, index) => {
-            const stageData = stages[stage];
-            const config = stageConfig[stage];
-            const isActive = stage === currentStage;
-            const progress = getStageProgress(stageData);
-            
-            return (
-              <div key={stage} className={`relative ${index < stageOrder.length - 1 ? 'pb-4' : ''}`}>
-                {/* Connection line */}
-                {index < stageOrder.length - 1 && (
-                  <div className="absolute left-3 top-8 w-0.5 h-12 bg-border" />
-                )}
-                
-                <div className={`flex items-start space-x-3 p-3 rounded-lg transition-colors ${
-                  isActive ? 'bg-muted/50 border border-primary/20' : 'hover:bg-muted/20'
-                }`}>
-                  {/* Stage Icon */}
-                  <div className="flex-shrink-0 mt-1">
-                    {getStageIcon(stage, stageData)}
-                  </div>
-                  
-                  {/* Stage Content */}
-                  <div className="flex-grow space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className={`font-medium ${isActive ? 'text-primary' : ''}`}>
-                          {config.title}
-                        </h4>
-                        <p className="text-sm text-muted-foreground">
-                          {config.description}
-                        </p>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant={getStatusBadgeVariant(stageData.status)}>
-                          {stageData.status.replace('-', ' ')}
-                        </Badge>
-                        {stageData.status !== 'pending' && stageData.status !== 'completed' && (
-                          <span className="text-sm text-muted-foreground">
-                            {progress}%
-                          </span>
-                        )}
-                      </div>
+          <div className="text-sm text-muted-foreground space-y-1 pl-2 border-l-2">
+            {currentStageData.startedAt && (
+              <p>Stage Started: {currentStageData.startedAt.toLocaleDateString()}</p>
+            )}
+            { (
+              <p>Stage Owner: {getStageOwnerName()}</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Onboarding Flow Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Onboarding Flow</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start">
+            {stageOrder.map((stage, index) => {
+              const config = stageConfig[stage];
+              const Icon = config.icon;
+              const isCompleted = index < currentStageIndex;
+              const isCurrent = index === currentStageIndex;
+
+              return (
+                <React.Fragment key={stage}>
+                  <div className="flex flex-col items-center text-center">
+                    <div
+                      className={cn(
+                        'flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300',
+                        isCurrent
+                          ? 'bg-primary border-primary text-primary-foreground scale-110'
+                          : isCompleted
+                          ? 'bg-primary/20 border-primary text-primary'
+                          : 'bg-muted border-border text-muted-foreground'
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
                     </div>
-                    
-                    {/* Stage Progress Bar */}
-                    {stageData.status === 'in-progress' && (
-                      <Progress value={progress} className="h-2" />
-                    )}
-                    
-                    {/* Stage Details */}
-                    {isActive && (
-                      <div className="mt-3 space-y-2">
-                        {stageData.tasks.map((task) => (
-                          <div key={task.id} className="flex items-center space-x-2 text-sm">
-                            <CheckCircle 
-                              className={`h-4 w-4 ${
-                                task.completed ? 'text-green-500' : 'text-muted-foreground'
-                              }`} 
-                            />
-                            <span className={task.completed ? 'line-through text-muted-foreground' : ''}>
-                              {task.title}
-                            </span>
-                            {task.required && !task.completed && (
-                              <Badge variant="outline" className="text-xs">Required</Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {/* Timestamps */}
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      {stageData.startedAt && (
-                        <div>Started: {stageData.startedAt.toLocaleDateString()}</div>
+                    <p
+                      className={cn(
+                        'mt-2 text-xs font-medium w-20',
+                        isCurrent ? 'text-primary' : 'text-muted-foreground'
                       )}
-                      {stageData.completedAt && (
-                        <div>Completed: {stageData.completedAt.toLocaleDateString()}</div>
-                      )}
-                      {stageData.assignedTo && (
-                        <div>Assigned to: {stageData.assignedTo}</div>
-                      )}
-                    </div>
+                    >
+                      {config.title}
+                    </p>
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
+                  {index < stageOrder.length - 1 && (
+                    <div
+                      className={cn(
+                        'mt-5 h-0.5 flex-1 transition-all duration-300',
+                        isCompleted ? 'bg-primary' : 'bg-border'
+                      )}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

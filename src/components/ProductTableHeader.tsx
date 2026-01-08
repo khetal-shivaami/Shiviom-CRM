@@ -1,11 +1,15 @@
 
+import { useState } from 'react';
 import { CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Search, Plus } from 'lucide-react';
 import { Product } from '../types';
 import BulkImportDialog from './BulkImportDialog';
 import ProductTableFilters from './ProductTableFilters';
+import AddCategoryDialog from './AddCategoryDialog';
+import KnowledgeHubDialog from './KnowledgeHubDialog';
 
 interface ProductTableHeaderProps {
   products: Product[];
@@ -17,8 +21,14 @@ interface ProductTableHeaderProps {
   onSearchChange: (value: string) => void;
   onStatusFilter: (status: string) => void;
   onCategoryFilter: (category: string) => void;
+  isKnowledgeHubOpen: boolean;
+  onKnowledgeHubOpenChange: (isOpen: boolean) => void;
+  selectedProductForKb: Product | null;
   onBulkImport?: (products: Product[]) => void;
+  onAddAddon?: () => void;
   onAddProduct?: () => void;
+  onProductUpdate?: (productId: string, updates: Partial<Product>) => void;
+  onCategoryAdded?: () => void;
 }
 
 const ProductTableHeader = ({
@@ -31,23 +41,39 @@ const ProductTableHeader = ({
   onSearchChange,
   onStatusFilter,
   onCategoryFilter,
+  isKnowledgeHubOpen,
+  onKnowledgeHubOpenChange,
+  selectedProductForKb,
   onBulkImport,
-  onAddProduct
+  onAddAddon,
+  onAddProduct,
+  onProductUpdate,
+  onCategoryAdded,
 }: ProductTableHeaderProps) => {
+  const [isAddCategoryDialogOpen, setIsAddCategoryDialogOpen] = useState(false);
+
   return (
     <CardHeader>
       <div className="flex items-center justify-between">
         <CardTitle>
-          Software Products Overview ({filteredProducts.length} of {products.length})
+          Product Details ({filteredProducts.length} of {products.length})
         </CardTitle>
-        <div className="flex items-center gap-2">
-          {currentUserRole === 'admin' && onAddProduct && (
-            <Button onClick={onAddProduct} className="gap-2">
-              <Plus size={16} />
-              Add Product
-            </Button>
+        <div className="flex items-center gap-2">          
+          {currentUserRole === 'admin' && (onAddProduct || onAddAddon || onCategoryAdded) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="gap-2">
+                  <Plus size={16} />
+                  Add New
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onCategoryAdded && <DropdownMenuItem onClick={() => setIsAddCategoryDialogOpen(true)}>Add New Category</DropdownMenuItem>}
+                {onAddProduct && <DropdownMenuItem onClick={onAddProduct}>Add Product</DropdownMenuItem>}
+                {onAddAddon && <DropdownMenuItem onClick={onAddAddon}>Add Add-on Service</DropdownMenuItem>}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
-          
           {currentUserRole === 'admin' && onBulkImport && (
             <BulkImportDialog
               type="products"
@@ -76,6 +102,20 @@ const ProductTableHeader = ({
           </div>
         </div>
       </div>
+      {onCategoryAdded && (
+        <AddCategoryDialog
+          open={isAddCategoryDialogOpen}
+          onOpenChange={setIsAddCategoryDialogOpen}
+          onSuccess={onCategoryAdded}
+        />
+      )}
+      <KnowledgeHubDialog
+        product={selectedProductForKb}
+        currentUserRole={currentUserRole}
+        open={isKnowledgeHubOpen}
+        onOpenChange={onKnowledgeHubOpenChange}
+        onUpdateKnowledgeBase={(productId, knowledgeBase) => onProductUpdate?.(productId, { knowledgeBase })}
+      />
     </CardHeader>
   );
 };

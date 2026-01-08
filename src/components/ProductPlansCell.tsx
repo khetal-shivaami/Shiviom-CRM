@@ -1,5 +1,6 @@
 
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { ProductPlan } from '../types';
 
 interface ProductPlansCellProps {
@@ -23,18 +24,24 @@ const ProductPlansCell = ({ plans }: ProductPlansCellProps) => {
   const sortedPlans = [...plans].sort((a, b) => a.price - b.price);
   
   return (
-    <div className="space-y-1">
+    <div className="space-y-3">
       {sortedPlans.map((plan) => (
-        <div key={plan.id} className="flex items-center gap-2 text-sm">
-          <span className="font-medium">{plan.name}:</span>
-          <span>₹{plan.price.toFixed(2)}</span>
-          <Badge className={getBillingBadgeColor(plan.billing)} variant="secondary">
-            {plan.billing}
-          </Badge>
+        <Card key={plan.id} className={`overflow-hidden ${plan.isPopular ? 'border-primary' : ''}`}>
           {plan.isPopular && (
-            <Badge variant="default" className="text-xs">Popular</Badge>
+            <div className="bg-primary text-primary-foreground text-xs font-bold text-center py-1">
+              MOST POPULAR
+            </div>
           )}
-        </div>
+          <CardContent className="p-3">
+            <div className="flex justify-between items-start">
+              <h5 className="font-semibold">{plan.name}</h5>
+              <Badge className={getBillingBadgeColor(plan.billing)} variant="secondary">
+                {plan.billing}
+              </Badge>
+            </div>
+            <p className="text-xl font-bold mt-1">₹{plan.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-normal text-muted-foreground">/ user</span></p>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );

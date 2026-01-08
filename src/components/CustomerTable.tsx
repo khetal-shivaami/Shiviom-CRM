@@ -1,6 +1,6 @@
 
-import { useState, useMemo } from 'react';
-import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useState, useMemo, useEffect } from 'react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -9,26 +9,24 @@ import { Customer, Partner, Product, User } from '../types';
 import CustomerTableHeader from './CustomerTableHeader';
 import CustomerTableFilters from './CustomerTableFilters';
 import CustomerTableRow from './CustomerTableRow';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface CustomerTableProps {
-  customers: Customer[];
   partners: Partner[];
   products: Product[];
   users: User[];
-  onStatusChange?: (customerId: string, newStatus: 'active' | 'inactive' | 'pending') => void;
-  onBulkStatusChange?: (customerIds: string[], newStatus: 'active' | 'inactive' | 'pending') => void;
-  onBulkImport?: (customers: Customer[]) => void;
 }
 
 const CustomerTable = ({ 
-  customers, 
   partners, 
   products, 
   users,
-  onStatusChange, 
-  onBulkStatusChange, 
-  onBulkImport 
 }: CustomerTableProps) => {
+  const { toast } = useToast();
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [processFilter, setProcessFilter] = useState('all');
@@ -36,6 +34,51 @@ const CustomerTable = ({
   const [valueFilter, setValueFilter] = useState(0);
   const [zoneFilter, setZoneFilter] = useState('all');
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
+
+  const fetchCustomers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: supabaseError } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (supabaseError) {
+        throw supabaseError;
+      }
+
+      if (data) {
+        const transformedData: Customer[] = data.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          email: item.email,
+          phone: item.phone,
+          company: item.company,
+          status: item.status,
+          process: item.process,
+          value: item.value,
+          zone: item.zone,
+          partnerId: item.partner_id,
+          productIds: item.product_ids,
+          assignedUserIds: item.assigned_user_ids,
+          createdAt: new Date(item.created_at),
+          lastEdited: item.last_edited ? new Date(item.last_edited) : undefined,
+        }));
+        setCustomers(transformedData);
+      }
+    } catch (err: any) {
+      setError(err.message);
+      console.error("Error fetching customers:", err);
+      toast({ title: "Error", description: "Failed to load customer data.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
 
   const filteredCustomers = useMemo(() => {
     return customers.filter((customer) => {
@@ -57,9 +100,22 @@ const CustomerTable = ({
     });
   }, [customers, searchTerm, statusFilter, processFilter, partnerFilter, valueFilter, zoneFilter]);
 
-  const handleStatusToggle = (customerId: string, currentStatus: string) => {
+  const handleStatusToggle = async (customerId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-    onStatusChange?.(customerId, newStatus as 'active' | 'inactive' | 'pending');
+    
+    const { error } = await supabase
+      .from('customers')
+      .update({ status: newStatus })
+      .eq('id', customerId);
+
+    if (error) {
+      toast({ title: 'Error updating status', description: error.message, variant: 'destructive' });
+    } else {
+      setCustomers(prev => prev.map(c => 
+        c.id === customerId ? { ...c, status: newStatus as Customer['status'] } : c
+      ));
+      toast({ title: 'Status updated successfully' });
+    }
   };
 
   const handleSelectCustomer = (customerId: string) => {
@@ -78,21 +134,55 @@ const CustomerTable = ({
     }
   };
 
-  const handleBulkAction = (action: string) => {
+  const handleBulkAction = async (action: string) => {
     if (selectedCustomers.length === 0) return;
     
-    switch (action) {
-      case 'activate':
-        onBulkStatusChange?.(selectedCustomers, 'active');
-        break;
-      case 'deactivate':
-        onBulkStatusChange?.(selectedCustomers, 'inactive');
-        break;
-      case 'pending':
-        onBulkStatusChange?.(selectedCustomers, 'pending');
-        break;
+    const statusMap: { [key: string]: Customer['status'] } = {
+      'activate': 'active',
+      'deactivate': 'inactive',
+      'pending': 'pending'
+    };
+
+    const newStatus = statusMap[action];
+    if (!newStatus) return;
+
+    const { error } = await supabase
+      .from('customers')
+      .update({ status: newStatus })
+      .in('id', selectedCustomers);
+
+    if (error) {
+      toast({ title: 'Error updating statuses', description: error.message, variant: 'destructive' });
+    } else {
+      setCustomers(prev => prev.map(c => 
+        selectedCustomers.includes(c.id) ? { ...c, status: newStatus } : c
+      ));
+      toast({ title: 'Bulk status update successful' });
     }
     setSelectedCustomers([]);
+  };
+
+  const handleBulkImport = async (importedData: any[]) => {
+    const customersToInsert = importedData.map(c => ({
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      company: c.company,
+      status: c.status || 'pending',
+      value: c.value || 0,
+      zone: c.zone || null,
+      partner_id: c.partnerId || null,
+      product_ids: c.productIds || null,
+    }));
+
+    const { error } = await supabase.from('customers').insert(customersToInsert);
+
+    if (error) {
+      toast({ title: 'Error importing customers', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Import successful', description: `${importedData.length} customers imported.` });
+      fetchCustomers(); // Refetch data
+    }
   };
 
   return (
@@ -103,7 +193,7 @@ const CustomerTable = ({
             filteredCount={filteredCustomers.length}
             totalCount={customers.length}
             selectedCount={selectedCustomers.length}
-            onBulkImport={onBulkImport}
+            onBulkImport={handleBulkImport}
             onBulkAction={handleBulkAction}
           />
           <div className="flex flex-col md:flex-row gap-4 items-center">
@@ -151,18 +241,30 @@ const CustomerTable = ({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCustomers.map((customer) => (
-                <CustomerTableRow
-                  key={customer.id}
-                  customer={customer}
-                  partners={partners}
-                  products={products}
-                  users={users}
-                  isSelected={selectedCustomers.includes(customer.id)}
-                  onSelect={handleSelectCustomer}
-                  onStatusToggle={handleStatusToggle}
-                />
-              ))}
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={11} className="h-24 text-center">
+                    Loading customers...
+                  </TableCell>
+                </TableRow>
+              ) : error ? (
+                <TableRow>
+                  <TableCell colSpan={11} className="h-24 text-center text-red-500">
+                    Error: {error}
+                  </TableCell>
+                </TableRow>
+              ) : filteredCustomers.map((customer) => (
+                  <CustomerTableRow
+                    key={customer.id}
+                    customer={customer}
+                    partners={partners}
+                    products={products}
+                    users={users}
+                    isSelected={selectedCustomers.includes(customer.id)}
+                    onSelect={handleSelectCustomer}
+                    onStatusToggle={handleStatusToggle}
+                  />
+                ))}
             </TableBody>
           </Table>
         </CardContent>
