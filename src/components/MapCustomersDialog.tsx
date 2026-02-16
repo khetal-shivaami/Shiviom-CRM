@@ -147,7 +147,7 @@ export const MapCustomersDialog = ({ partners, customers, open, onOpenChange, on
       if (!selectedPartnerObject) {
         throw new Error("Could not find the selected partner details.");
       }
-      const portalResellerId = selectedPartnerObject.id;
+      const portalResellerId = selectedPartnerObject.portal_reseller_id;
       const customerIds = mappedCustomers.map(c => c.id);
 
       // As requested, printing the IDs to the console

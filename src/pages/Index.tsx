@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getDashboardStats } from '@/utils/api';
 import { useDataManager } from '@/components/DataManager';
 import SidebarComponent from '@/components/Sidebar';
+import Transactions from '@/components/Transactions';
 import TabContentRenderer from '@/components/TabContentRenderer';
 import { DashboardManager, defaultDashboards } from '@/components/DashboardManager';
 import { Customer, Partner, Product, User, Renewal, DashboardStats as StatsType, Dashboard } from '@/types';
@@ -190,6 +191,10 @@ const Index = () => {
       );
     }
 
+    if (activeTab === 'transactions') {
+      return <Transactions />;
+    }
+
     return (
       <div className="p-4">
         <TabContentRenderer
@@ -248,44 +253,48 @@ const Index = () => {
         <SidebarComponent activeTab={activeTab} onTabChange={setActiveTab} />
         <SidebarInset className="flex-1">
           <main className="p-6">
-            <TabContentRenderer
-              activeTab={activeTab}
-              currentDashboard={currentDashboard}
-              timeframe={timeframe}
-              customDateRange={customDateRange}
-              dashboards={dashboards}
-              activeDashboard={activeDashboard}
-              filteredCustomers={filteredCustomers}
-              filteredRenewals={filteredRenewals}
-              stats={stats}
-              customers={customers}
-              partners={partners}
-              products={products}
-              users={users}
-              renewals={renewals}
-              onTimeframeChange={setTimeframe}
-              onCustomDateChange={setCustomDateRange}
-              onDashboardChange={setActiveDashboard}
-              onCreateDashboard={handleCreateDashboard}
-              onCreateAndCustomize={handleCreateAndCustomize}
-              onUpdateDashboard={handleUpdateDashboard}
-              onDeleteDashboard={handleDeleteDashboard}
-              onCustomerAdd={handleCustomerAdd}
-              onCustomerUpdate={handleCustomerUpdate}
-              onBulkAction={handleBulkAction}
-              onCustomerImport={handleCustomerImport}
-              onProductAdd={handleProductAdd}
-              onProductImport={handleProductImport}
-              onProductPriceUpdate={handleProductPriceUpdate}
-              onProductStatusChange={handleProductStatusChange}
-              onProductBulkStatusChange={handleProductBulkStatusChange}
-              onProductUpdate={handleProductUpdate}
-              onPartnerAdd={handlePartnerAdd}
-              onUserAdd={handleUserAdd}
-              onUserUpdate={handleUserUpdate}
-              onUserBulkStatusChange={handleUserBulkStatusChange}
-              onUsersChange={() => handleDataChange('users')}
-            />
+            {activeTab === 'transactions' ? (
+              <Transactions />
+            ) : (
+              <TabContentRenderer
+                activeTab={activeTab}
+                currentDashboard={currentDashboard}
+                timeframe={timeframe}
+                customDateRange={customDateRange}
+                dashboards={dashboards}
+                activeDashboard={activeDashboard}
+                filteredCustomers={filteredCustomers}
+                filteredRenewals={filteredRenewals}
+                stats={stats}
+                customers={customers}
+                partners={partners}
+                products={products}
+                users={users}
+                renewals={renewals}
+                onTimeframeChange={setTimeframe}
+                onCustomDateChange={setCustomDateRange}
+                onDashboardChange={setActiveDashboard}
+                onCreateDashboard={handleCreateDashboard}
+                onCreateAndCustomize={handleCreateAndCustomize}
+                onUpdateDashboard={handleUpdateDashboard}
+                onDeleteDashboard={handleDeleteDashboard}
+                onCustomerAdd={handleCustomerAdd}
+                onCustomerUpdate={handleCustomerUpdate}
+                onBulkAction={handleBulkAction}
+                onCustomerImport={handleCustomerImport}
+                onProductAdd={handleProductAdd}
+                onProductImport={handleProductImport}
+                onProductPriceUpdate={handleProductPriceUpdate}
+                onProductStatusChange={handleProductStatusChange}
+                onProductBulkStatusChange={handleProductBulkStatusChange}
+                onProductUpdate={handleProductUpdate}
+                onPartnerAdd={handlePartnerAdd}
+                onUserAdd={handleUserAdd}
+                onUserUpdate={handleUserUpdate}
+                onUserBulkStatusChange={handleUserBulkStatusChange}
+                onUsersChange={() => handleDataChange('users')}
+              />
+            )}
           </main>
         </SidebarInset>
       </div>

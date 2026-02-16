@@ -20,6 +20,7 @@ export interface Customer {
 }
 
 export interface Partner {
+  partner_status: ReactNode;
   renewal_manager_id: string;
   renewal_manager_name: string;
   id: string;

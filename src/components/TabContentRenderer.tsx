@@ -16,8 +16,10 @@ import CustomerView from '@/components/CustomerView';
 import PartnerOnboarding from '@/components/PartnerOnboarding';
 import Quotations from '@/components/Quotations';
 import TaskManagement from '@/components/TaskManagement';
+import Transactions from '@/components/Transactions';
 import DeploymentPage from '@/components/Deployment';
 import { Customer, Partner, Product, User, Renewal, DashboardStats as StatsType } from '@/types';
+import AddLicense from './AddLicense';
 import { Dashboard } from './DashboardManager';
 import { useAuth } from '@/contexts/AuthContext';
 import ZohoTicketModule from '@/components/ZohoTicketModule';
@@ -291,6 +293,10 @@ const TabContentRenderer = ({
       );
     case 'deployment':
       return <DeploymentPage customers={customers} products={products} users={users} />;
+    case 'transactions':
+      return <Transactions />;
+    case 'add-license':
+      return <AddLicense />;
     default:
       return (
         <div className="space-y-6">

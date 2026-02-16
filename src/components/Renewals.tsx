@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Fragment } from 'react';
 import * as XLSX from 'xlsx';
 import { API_ENDPOINTS } from '@/config/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +12,14 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Calendar as CalendarIcon, AlertTriangle, CheckCircle, Clock, XCircle, Phone, Mail, Filter, ChevronDown, Users, Download, Send, Trash2, Edit, UserIcon, Eye, X, MessageSquare, Loader2, Activity, RotateCcw, PlusCircle, Plus } from 'lucide-react';
+import { Calendar as CalendarIcon, AlertTriangle, CheckCircle, Clock, XCircle, Phone, Mail, Filter, ChevronDown, Users, Download, Send, Trash2, Edit, UserIcon, Eye, X, MessageSquare, Loader2, Activity, RotateCcw, PlusCircle, Plus, Search } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -53,6 +60,7 @@ const Renewals = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [partnerFilter, setPartnerFilter] = useState('all');
   const [productFilter, setProductFilter] = useState('all');
+  const [customerFilter, setCustomerFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [grdMonthFilter, setGrdMonthFilter] = useState('all');
@@ -60,6 +68,8 @@ const Renewals = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [presetDateRange, setPresetDateRange] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [partnerSearchTerm, setPartnerSearchTerm] = useState('');
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   
   // Selection states
   const [selectedRenewals, setSelectedRenewals] = useState<string[]>([]);
@@ -70,6 +80,7 @@ const Renewals = () => {
   const [customerDetailOpen, setCustomerDetailOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
+  const [expandedCustomerIds, setExpandedCustomerIds] = useState<string[]>([]);
   const [selectedRenewalsForCustomer, setSelectedRenewalsForCustomer] = useState<Renewal[]>([]);
 
   // Row-level comment states
@@ -173,7 +184,15 @@ const Renewals = () => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(API_ENDPOINTS.GET_RENEWAL_CRMDATA);
+        const formData = new FormData();
+        if (user?.id && profile?.role) {
+            formData.append('user_id', user.id);
+            formData.append('role', profile.role);
+        }
+        const response = await fetch(API_ENDPOINTS.GET_RENEWAL_CRMDATA, {
+            method: 'POST',
+            body: formData,
+        });
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -215,6 +234,8 @@ const Renewals = () => {
               agreementSigned: false,
               productTypes: [],
               paymentTerms: 'net-30',
+              renewal_manager_id: '',
+              renewal_manager_name: ''
             });
           }
 
@@ -263,7 +284,8 @@ const Renewals = () => {
             contractValue: parseFloat(item.revenue_amt || item.price || 0),
             status: item.status,
             notificationSent: false,
-            price: parseFloat( item.price || 0),
+            price: parseFloat(item.price || 0),
+            revenue_amt: 0
           });
         });
 
@@ -284,12 +306,12 @@ const Renewals = () => {
     };
 
     fetchData();
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     // Reset to first page when filters change
     setCurrentPage(1);
-  }, [statusFilter, partnerFilter, productFilter, dateFilter, searchTerm, grdMonthFilter, srdMonthFilter, presetDateRange, dateRange]);
+  }, [statusFilter, partnerFilter, productFilter, customerFilter, dateFilter, searchTerm, grdMonthFilter, srdMonthFilter, presetDateRange, dateRange]);
 
   useEffect(() => {
     const now = new Date();
@@ -318,7 +340,13 @@ const Renewals = () => {
         break;
     }
   }, [presetDateRange]);
-
+  const handleToggleExpand = (customerId: string) => {
+    setExpandedCustomerIds(prev =>
+      prev.includes(customerId)
+        ? prev.filter(id => id !== customerId)
+        : [...prev, customerId]
+    );
+  };
   const getCustomerDomain = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
     return customer?.domainName || 'Unknown Customer';
@@ -330,7 +358,8 @@ const Renewals = () => {
 
   const getPartnerName = (partnerId: string) => {
     const partner = partners.find(p => p.id === partnerId);
-    return partner ? partner.name : 'Unknown Partner';
+    if (!partner) return 'Unknown Partner';
+    return partner.company ? `${partner.name} (${partner.company})` : partner.name;
   };
 
   const getPartner = (partnerId: string) => {
@@ -372,6 +401,31 @@ const Renewals = () => {
     return Array.from(months).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
   }, [renewals]);
 
+  const filteredPartnersForDropdown = useMemo(() => {
+    if (!partnerSearchTerm) {
+      return partners;
+    }
+    return partners.filter(partner =>
+      partner.name.toLowerCase().includes(partnerSearchTerm.toLowerCase())
+    );
+  }, [partners, partnerSearchTerm]);
+
+  const customersWithRenewals = useMemo(() => {
+    const customerIdsInRenewals = new Set(renewals.map(r => r.customerId));
+    return customers.filter(c => customerIdsInRenewals.has(c.id));
+  }, [renewals, customers]);
+
+  const filteredCustomersForDropdown = useMemo(() => {
+    if (!customerSearchTerm) {
+      return customersWithRenewals;
+    }
+    return customersWithRenewals.filter(customer =>
+      (customer.name.toLowerCase().includes(customerSearchTerm.toLowerCase())) ||
+      (customer.company?.toLowerCase().includes(customerSearchTerm.toLowerCase())) ||
+      (customer.domainName?.toLowerCase().includes(customerSearchTerm.toLowerCase()))
+    );
+  }, [customersWithRenewals, customerSearchTerm]);
+
 
   const filteredRenewals = useMemo(() => {
     return renewals.filter(renewal => {
@@ -383,6 +437,9 @@ const Renewals = () => {
       
       // Product filter
       if (productFilter !== 'all' && renewal.productId !== productFilter) return false;
+      
+      // Customer/Company filter
+      if (customerFilter !== 'all' && renewal.customerId !== customerFilter) return false;
       
       // Date filter
       if (dateFilter !== 'all') {
@@ -421,14 +478,17 @@ const Renewals = () => {
       
       // Search filter
       if (searchTerm) {
-        const customerDomain = getCustomerDomain(renewal.customerId).toLowerCase();
+        const customer = getCustomer(renewal.customerId);
+        const customerDomain = (customer?.domainName || '').toLowerCase();
+        const customerCompany = (customer?.company || '').toLowerCase();
         const partnerName = getPartnerName(renewal.partnerId).toLowerCase();
         const productName = getProductName(renewal.productId).toLowerCase();
         const searchLower = searchTerm.toLowerCase();
         
         if (!customerDomain.includes(searchLower) && 
             !partnerName.includes(searchLower) && 
-            !productName.includes(searchLower)) {
+            !productName.includes(searchLower) &&
+            !customerCompany.includes(searchLower)) {
           return false;
         }
       }
@@ -444,7 +504,7 @@ const Renewals = () => {
       }
       return true;
     });
-  }, [renewals, statusFilter, partnerFilter, productFilter, dateFilter, searchTerm, grdMonthFilter, srdMonthFilter, dateRange]);
+  }, [renewals, statusFilter, partnerFilter, productFilter, customerFilter, dateFilter, searchTerm, grdMonthFilter, srdMonthFilter, dateRange]);
   
   const groupedAndFilteredRenewals = useMemo(() => {
     const grouped: { [customerId: string]: Renewal[] } = {};
@@ -454,7 +514,16 @@ const Renewals = () => {
       }
       grouped[renewal.customerId].push(renewal);
     });
-    return Object.values(grouped);
+    const groupedArray = Object.values(grouped);
+
+    // Sort by the earliest renewal date in each group
+    groupedArray.sort((groupA, groupB) => {
+      const earliestA = Math.min(...groupA.map(r => r.renewalDate.getTime()));
+      const earliestB = Math.min(...groupB.map(r => r.renewalDate.getTime()));
+      return earliestA - earliestB;
+    });
+
+    return groupedArray;
   }, [filteredRenewals]);
 
   // Pagination logic
@@ -648,6 +717,14 @@ const Renewals = () => {
   const selectedRenewalObjects = filteredRenewals.filter(r => selectedRenewals.includes(r.id));
 
   const handleBulkEmail = () => {
+    if (partnerFilter === 'all') {
+      toast({
+        title: "Partner Not Selected",
+        description: "Please select a specific partner from the filters to send bulk renewal notifications.",
+        variant: "destructive",
+      });
+      return;
+    }
     setBulkEmailOpen(true);
   };
 
@@ -689,6 +766,7 @@ const Renewals = () => {
     setStatusFilter('all');
     setPartnerFilter('all');
     setProductFilter('all');
+    setCustomerFilter('all');
     setDateFilter('all');
     setGrdMonthFilter('all');
     setSrdMonthFilter('all');
@@ -821,7 +899,7 @@ const Renewals = () => {
               <div className="flex items-center gap-2">
                 <div className="relative">
                   <Input
-                    placeholder="Search customers, partners, products..."
+                    placeholder="Search by company, customer, partner, product..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-64 pr-8"
@@ -859,7 +937,7 @@ const Renewals = () => {
             
             <Collapsible open={showFilters} onOpenChange={setShowFilters}>
               <CollapsibleContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4 border rounded-lg bg-muted/50">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-muted/50">
                   <div>
                     <label className="text-sm font-medium mb-2 block">Status</label>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -880,21 +958,82 @@ const Renewals = () => {
                   
                   <div>
                     <label className="text-sm font-medium mb-2 block">Partner</label>
-                    <Select value={partnerFilter} onValueChange={setPartnerFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Partners" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Partners</SelectItem>
-                        {partners.map((partner) => (
-                          <SelectItem key={partner.id} value={partner.id}>
-                            {partner.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full justify-between">
+                          {partnerFilter === 'all' 
+                            ? 'All Partners' 
+                            : partners.find(p => p.id === partnerFilter)?.name || 'Select Partner'}
+                          <ChevronDown className="h-4 w-4 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                        <div className="p-2">
+                          <div className="relative">
+                            <Search size={14} className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              placeholder="Search partners..."
+                              value={partnerSearchTerm}
+                              onChange={(e) => setPartnerSearchTerm(e.target.value)}
+                              className="pl-8 h-8 text-sm"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                        <DropdownMenuSeparator />
+                        <div className="max-h-60 overflow-y-auto">
+                          <DropdownMenuItem onSelect={() => setPartnerFilter('all')}>
+                            All Partners
+                          </DropdownMenuItem>
+                          {filteredPartnersForDropdown.map((partner) => (
+                            <DropdownMenuItem key={partner.id} onSelect={() => setPartnerFilter(partner.id)}>
+                              {partner.name}
+                            </DropdownMenuItem>
+                          ))}
+                        </div>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Company</label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full justify-between text-left">
+                          <span className="truncate">
+                            {customerFilter === 'all' 
+                              ? 'All Companies' 
+                              : customers.find(c => c.id === customerFilter)?.company || 
+                                customers.find(c => c.id === customerFilter)?.name || 
+                                'Select Company'}
+                          </span>
+                          <ChevronDown className="h-4 w-4 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                        <div className="p-2">
+                          <div className="relative">
+                            <Search size={14} className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              placeholder="Search companies..."
+                              value={customerSearchTerm}
+                              onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                              className="pl-8 h-8 text-sm"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        </div>
+                        <DropdownMenuSeparator />
+                        <div className="max-h-60 overflow-y-auto">
+                          <DropdownMenuItem onSelect={() => setCustomerFilter('all')}>All Companies</DropdownMenuItem>
+                          {filteredCustomersForDropdown.map((customer) => (
+                            <DropdownMenuItem key={customer.id} onSelect={() => setCustomerFilter(customer.id)}>{customer.company || customer.name}</DropdownMenuItem>
+                          ))}
+                        </div>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
                   <div>
                     <label className="text-sm font-medium mb-2 block">Product</label>
                     <Select value={productFilter} onValueChange={setProductFilter}>
@@ -977,43 +1116,32 @@ const Renewals = () => {
                           </SelectContent>
                         </Select>
                         {presetDateRange === 'custom' && (
-                          <div className="flex items-center space-x-2">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant={"outline"} className={cn("w-[200px] justify-start text-left font-normal", !dateRange?.from && "text-muted-foreground")}>
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {dateRange?.from ? format(dateRange.from, "LLL dd, y") : <span>Start date</span>}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                  mode="single"
-                                  selected={dateRange?.from}
-                                  onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
-                                  disabled={{ after: dateRange?.to }}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                            <span className="text-muted-foreground">-</span>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant={"outline"} className={cn("w-[200px] justify-start text-left font-normal", !dateRange?.to && "text-muted-foreground")}>
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {dateRange?.to ? format(dateRange.to, "LLL dd, y") : <span>End date</span>}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                  mode="single"
-                                  selected={dateRange?.to}
-                                  onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
-                                  disabled={{ before: dateRange?.from }}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                id="date"
+                                variant={"outline"}
+                                className={cn(
+                                  "w-[300px] justify-start text-left font-normal",
+                                  !dateRange && "text-muted-foreground"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {dateRange?.from ? (
+                                  dateRange.to ? (
+                                    <>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>
+                                  ) : (
+                                    format(dateRange.from, "LLL dd, y")
+                                  )
+                                ) : (
+                                  <span>Pick a date range</span>
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} />
+                            </PopoverContent>
+                          </Popover>
                         )}
                       </div>
                     </div>
@@ -1110,99 +1238,240 @@ const Renewals = () => {
                 const partner = getPartner(firstRenewal.partnerId);
                 const assignedEmployee = getFirstAssignedEmployee(firstRenewal.partnerId);
                 const isSelected = customerRenewals.every(r => selectedRenewals.includes(r.id));
+                const isExpanded = expandedCustomerIds.includes(firstRenewal.customerId);
 
-                const nextRenewalDate = new Date(Math.min(...customerRenewals.map(r => r.renewalDate.getTime())));
+                const minRenewalDate = Math.min(...customerRenewals.map(r => r.renewalDate.getTime()));
+                const renewalsWithEarliestDate = customerRenewals.filter(r => r.renewalDate.getTime() === minRenewalDate);
+                const productNamesForEarliestRenewal = renewalsWithEarliestDate.map(r => getProductName(r.productId));
+
+                const nextRenewalDate = new Date(minRenewalDate);
                 const daysLeft = getDaysUntilRenewal(nextRenewalDate);
                 const totalContractValue = customerRenewals.reduce((sum, r) => sum + r.contractValue, 0);
                 const statuses = customerRenewals.map(r => r.status.toLowerCase());
                 let overallStatus = 'upcoming';
-                if (statuses.includes('overdue')) overallStatus = 'overdue';
-                else if (statuses.includes('due')) overallStatus = 'due';
-                else if (statuses.every(s => s === 'renewed')) overallStatus = 'renewed';
-                else if (statuses.every(s => s === 'cancelled')) overallStatus = 'cancelled';
-                else if (statuses.every(s => s === 'suspended')) overallStatus = 'suspended';
-                
+                if (statuses.includes('overdue')) {
+                  overallStatus = 'overdue';
+                } else if (statuses.includes('due')) {
+                  overallStatus = 'due';
+                } else if (statuses.every(s => s === 'renewed')) {
+                  overallStatus = 'renewed';
+                } else if (statuses.every(s => s === 'cancelled')) {
+                  overallStatus = 'cancelled';
+                } else if (statuses.every(s => s === 'suspended')) {
+                  overallStatus = 'suspended';
+                }
                 return (
-                  <TableRow key={firstRenewal.customerId} className={`hover:bg-muted/50 ${isSelected ? 'bg-muted/30' : ''}`}>
-                    <TableCell>
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={(checked) => {
-                          const renewalIds = customerRenewals.map(r => r.id);
-                          if (checked) {
-                            setSelectedRenewals(prev => [...prev, ...renewalIds.filter(id => !prev.includes(id))]);
-                          } else {
-                            setSelectedRenewals(prev => prev.filter(id => !renewalIds.includes(id)));
-                          }
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      <Button
-                        variant="link"
-                        className="p-0 h-auto font-medium text-left"
-                        onClick={() => handleCustomerClick(customerRenewals)}
-                      >
-                        {customer?.domainName || getCustomerDomain(firstRenewal.customerId)}
-                      </Button>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{customerRenewals.length} Product(s)</Badge>
-                    </TableCell>
-                    <TableCell>{getPartnerName(firstRenewal.partnerId)}</TableCell>
-                    <TableCell>{nextRenewalDate.toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <span className={`font-medium ${
-                        daysLeft < 0 ? 'text-red-600' : 
-                        daysLeft <= 30 ? 'text-yellow-600' : 
-                        'text-green-600'
-                      }`}>
-                        {daysLeft < 0 ? `${Math.abs(daysLeft)} days overdue` : 
-                         daysLeft === 0 ? 'Due today' : 
-                         `${daysLeft} days`}
-                      </span>
-                    </TableCell>
-                    <TableCell>₹{totalContractValue.toLocaleString('en-IN')}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(overallStatus)}
-                        <Badge className={getStatusColor(overallStatus)}>
-                          {overallStatus}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {firstRenewal.lastContactDate ? 
-                        firstRenewal.lastContactDate.toLocaleDateString() : 
-                        'No contact'
-                      }
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {customer && partner && (
-                          <RenewalEmailDialog
-                            renewal={firstRenewal} // Still might need a primary renewal for context
-                            customer={customer}
-                            partner={partner}
-                            products={products}
-                            assignedEmployee={assignedEmployee}
-                          >
-                            <Button variant="outline" size="sm" className="gap-1" title='Mail'>
-                              <Mail size={14} />
-                              
-                            </Button>
-                          </RenewalEmailDialog>
-                        )}
-                        {profile?.role === 'admin' && (
-                          <Button variant="destructive" size="sm" className="gap-1" onClick={() => handleOpenSuspendDialog(firstRenewal)}>
-                            {/* Using AlertTriangle as a stand-in for a suspend/pause icon */}
-                            <AlertTriangle size={14} />
-                            Suspend
+                  <Fragment key={firstRenewal.customerId}>
+                    <TableRow className={`hover:bg-muted/50 ${isSelected ? 'bg-muted/30' : ''} ${isExpanded ? 'bg-primary/10' : ''}`}>
+                      <TableCell>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(checked) => {
+                            const renewalIds = customerRenewals.map(r => r.id);
+                            if (checked) {
+                              setSelectedRenewals(prev => [...new Set([...prev, ...renewalIds])]);
+                            } else {
+                              setSelectedRenewals(prev => prev.filter(id => !renewalIds.includes(id)));
+                            }
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <Button
+                          variant="link"
+                          className="p-0 h-auto font-medium text-left"
+                          onClick={() => handleCustomerClick(customerRenewals)}
+                        >
+                          {customer?.domainName || getCustomerDomain(firstRenewal.customerId)}
+                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        {customerRenewals.length > 1 ? (
+                          <Button variant="ghost" size="sm" onClick={() => handleToggleExpand(firstRenewal.customerId)} className="flex items-center gap-1">
+                            <Badge variant="secondary">{customerRenewals.length} Products</Badge>
+                            <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                           </Button>
+                        ) : (
+                          <Badge variant="secondary">1 Product</Badge>
                         )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                      </TableCell>
+                      <TableCell>{getPartnerName(firstRenewal.partnerId)}</TableCell>
+                      <TableCell>
+                        {nextRenewalDate.toLocaleDateString()}
+                        {productNamesForEarliestRenewal.length > 0 && (
+                          <div className="text-xs text-muted-foreground">
+                            for {productNamesForEarliestRenewal.join(', ')}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`font-medium ${
+                          daysLeft < 0 ? 'text-red-600' : 
+                          daysLeft <= 30 ? 'text-yellow-600' : 
+                          'text-green-600'
+                        }`}>
+                          {daysLeft < 0 ? `${Math.abs(daysLeft)} days overdue` : 
+                           daysLeft === 0 ? 'Due today' : 
+                           `${daysLeft} days`}
+                        </span>
+                      </TableCell>
+                      <TableCell>₹{totalContractValue.toLocaleString('en-IN')}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(overallStatus)}
+                          <Badge className={getStatusColor(overallStatus)}>
+                            {overallStatus}
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {firstRenewal.lastContactDate ? 
+                          firstRenewal.lastContactDate.toLocaleDateString() : 
+                          'No contact'
+                        }
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {customer && partner && (
+                            <RenewalEmailDialog
+                              renewal={firstRenewal} // Still might need a primary renewal for context
+                              customer={customer}
+                              partner={partner}
+                              products={products}
+                              assignedEmployee={assignedEmployee}
+                            >
+                              <Button variant="outline" size="sm" className="gap-1" title='Mail'>
+                                <Mail size={14} />
+                              </Button>
+                            </RenewalEmailDialog>
+                          )}
+                          {profile?.role === 'admin' && (
+                            <Button variant="destructive" size="sm" className="gap-1" onClick={() => handleOpenSuspendDialog(firstRenewal)}>
+                              <AlertTriangle size={14} />
+                              Suspend
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {isExpanded && (
+                      <TableRow className="bg-muted/10 hover:bg-muted/20">
+                        <TableCell />
+                        <TableCell colSpan={9} className="p-2">
+                          <div className="p-2 bg-background rounded-md border">
+                            <h4 className="font-semibold mb-2 px-2">All Renewals for {customer?.domainName}</h4>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Product</TableHead>
+                                  <TableHead>Renewal Date</TableHead>
+                                  <TableHead>Days Left</TableHead>
+                                  <TableHead>Value</TableHead>
+                                  <TableHead>Status</TableHead>
+                                  <TableHead>Actions</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {customerRenewals.map(renewal => {
+                                  const daysLeft = getDaysUntilRenewal(renewal.renewalDate);
+                                  const singleCustomer = getCustomer(renewal.customerId);
+                                  const singlePartner = getPartner(renewal.partnerId);
+                                  const singleAssignedEmployee = getFirstAssignedEmployee(renewal.partnerId);
+
+                                  return (
+                                    <TableRow key={renewal.id}>
+                                      <TableCell>{getProductName(renewal.productId)}</TableCell>
+                                      <TableCell>{renewal.renewalDate.toLocaleDateString()}</TableCell>
+                                      <TableCell>
+                                        <span className={`font-medium ${
+                                            daysLeft < 0 ? 'text-red-600' : 
+                                            daysLeft <= 30 ? 'text-yellow-600' : 
+                                            'text-green-600'
+                                        }`}>
+                                            {daysLeft < 0 ? `${Math.abs(daysLeft)} days overdue` : 
+                                            daysLeft === 0 ? 'Due today' : 
+                                            `${daysLeft} days`}
+                                        </span>
+                                      </TableCell>
+                                      <TableCell>₹{renewal.contractValue.toLocaleString('en-IN')}</TableCell>
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          {getStatusIcon(renewal.status)}
+                                          <Badge className={getStatusColor(renewal.status)}>{renewal.status}</Badge>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex gap-1">
+                                          {singleCustomer && singlePartner && (
+                                            <RenewalEmailDialog
+                                              renewal={renewal}
+                                              customer={singleCustomer}
+                                              partner={singlePartner}
+                                              products={products}
+                                              assignedEmployee={singleAssignedEmployee}
+                                            >
+                                              <Button variant="ghost" size="icon" title='Mail'><Mail size={14} /></Button>
+                                            </RenewalEmailDialog>
+                                          )}
+                                          <Button variant="ghost" size="icon" onClick={() => handleToggleComments(renewal.id)}><MessageSquare size={14} /></Button>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  )
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {expandedRenewalId && customerRenewals.some(r => r.id === expandedRenewalId) && (
+                      <TableRow key={`${expandedRenewalId}-comments`} className="bg-muted/20 hover:bg-muted/20">
+                        <TableCell colSpan={10} className="p-0">
+                          <div className="p-4">
+                            <Card>
+                              <CardHeader>
+                                <CardTitle className="text-lg flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <MessageSquare size={18} />
+                                    Comments for {getProductName(renewals.find(r => r.id === expandedRenewalId)?.productId || '')}
+                                  </div>
+                                  <Button variant="ghost" size="icon" onClick={() => setExpandedRenewalId(null)}><X className="h-4 w-4" /></Button>
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                  {/* Comment History (Left Side) */}
+                                  <div className="md:col-span-2 space-y-3 max-h-72 overflow-y-auto pr-4 border-r">
+                                    {renewalComments.length > 0 ? renewalComments.map(comment => (
+                                      <div key={comment.id} className="p-3 bg-muted/50 rounded-lg text-sm">
+                                        <div className="flex justify-between items-start mb-1">
+                                          <span className="font-medium">{comment.created_by_name || 'User'}</span>
+                                          <span className="text-xs text-muted-foreground">{formatTimeAgo(comment.created_at)}</span>
+                                        </div>
+                                        <p className="whitespace-pre-wrap text-muted-foreground">{comment.comment}</p>
+                                      </div>
+                                    )) : (
+                                      <div className="flex items-center justify-center h-full text-muted-foreground">No comments yet.</div>
+                                    )}
+                                  </div>
+                                  {/* Add Comment (Right Side) */}
+                                  <div className="space-y-3">
+                                    <Label htmlFor="new-comment">Add a comment</Label>
+                                    <Textarea id="new-comment" placeholder="Type your comment here..." value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={4} />
+                                    <Button onClick={handleAddComment} disabled={isSubmittingComment || !newComment.trim()} className="w-full">
+                                      <Send size={16} className="mr-2" />
+                                      Post Comment
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
                 );
               })}
               {filteredRenewals.map((renewal) => (
@@ -1262,6 +1531,7 @@ const Renewals = () => {
         customers={customers}
         partners={partners}
         users={users}
+        products={products}
         open={bulkEmailOpen}
         onOpenChange={setBulkEmailOpen}
       />

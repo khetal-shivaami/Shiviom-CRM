@@ -316,7 +316,7 @@ const RoleManagementDialog = () => {
           Manage Roles
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-6xl">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Role Management</DialogTitle>
         </DialogHeader>

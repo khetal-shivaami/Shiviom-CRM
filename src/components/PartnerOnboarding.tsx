@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; 
 import { Progress } from '@/components/ui/progress';
-import { Search, UserPlus, Filter, CheckCircle, Clock, AlertCircle, Eye, Users, FileText, Handshake, Shield, PenTool, Trophy, Link, KeyRound, X, Edit, Calendar as CalendarIcon, RotateCcw, ChevronsUpDown, Loader2, History, Share2 } from 'lucide-react';
+import { Search, UserPlus, Filter, CheckCircle, Clock, AlertCircle, Eye, Users, FileText, Handshake, Shield, PenTool, Trophy, Link, KeyRound, X, Edit, Calendar as CalendarIcon, RotateCcw, ChevronsUpDown, Loader2, History, Share2, Globe } from 'lucide-react';
 import { DateRange, DayPicker } from 'react-day-picker';
 import { Partner, User, OnboardingStage, PartnerOnboardingData } from '@/types';
 import AddPartnerForm from '@/components/AddPartnerForm';
@@ -24,6 +24,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/config/api';
 import { cn } from '@/lib/utils';
+import { AddPartnerDomainDialog } from './AddPartnerDomainDialog';
 import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 import {
   Dialog,
@@ -79,6 +80,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   const [isSendingDocs, setIsSendingDocs] = useState(false);
   const [selectedPartnerForDocs, setSelectedPartnerForDocs] = useState<string | null>(null);
   const [shareDocsPopoverOpen, setShareDocsPopoverOpen] = useState(false);
+  const [isAddDomainModalOpen, setIsAddDomainModalOpen] = useState(false);
   const [documentsToShare, setDocumentsToShare] = useState({
     kycForm: false,
     resellerAgreement: false,
@@ -734,6 +736,10 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
             <UserPlus className="h-4 w-4 mr-2" />
             Add Partner
           </Button>
+          <Button onClick={() => setIsAddDomainModalOpen(true)}>
+            <Globe className="h-4 w-4 mr-2" />
+            Add Partner Domain
+          </Button>
           <Button onClick={() => setIsShareAccessOpen(true)}>
             <Link className="h-4 w-4 mr-2" />
             Share Portal Access
@@ -855,55 +861,39 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                 Reset
               </Button>
               {presetDateRange === 'custom' && (
-                <div className="flex items-center space-x-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-[200px] justify-start text-left font-normal",
-                          !dateRange?.from && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange?.from ? format(dateRange.from, "LLL dd, y") : <span>Start date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={dateRange?.from}
-                        onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
-                        disabled={{ after: dateRange?.to }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <span className="text-muted-foreground">-</span>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-[200px] justify-start text-left font-normal",
-                          !dateRange?.to && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {dateRange?.to ? format(dateRange.to, "LLL dd, y") : <span>End date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={dateRange?.to}
-                        onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
-                        disabled={{ before: dateRange?.from }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="date"
+                      variant={"outline"}
+                      className={cn(
+                        "w-[300px] justify-start text-left font-normal",
+                        !dateRange && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>
+                        ) : (
+                          format(dateRange.from, "LLL dd, y")
+                        )
+                      ) : (
+                        <span>Pick a date range</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={2}
+                    />
+                  </PopoverContent>
+                </Popover>
               )}
             </div>
           </div>
@@ -1039,7 +1029,10 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           </div>
         </CardContent>
       </Card>
-
+         <AddPartnerDomainDialog
+        open={isAddDomainModalOpen}
+        onOpenChange={setIsAddDomainModalOpen}
+      />       
       <Dialog open={isShareAccessOpen} onOpenChange={setIsShareAccessOpen}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>

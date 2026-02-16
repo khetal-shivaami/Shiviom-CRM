@@ -6,9 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { X, Edit, Loader2, PlusCircle } from 'lucide-react';
+import { X, Edit, Loader2, PlusCircle, ChevronsUpDown, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { supabase } from '@/integrations/supabase/client'; 
 import { Partner, Product, Customer, Plan } from '../types';
 import { cn } from '@/lib/utils';
@@ -60,6 +62,9 @@ const CustomerForm = ({ onSuccess, onCancel }: CustomerFormProps) => {
   const [editingAddonPriceId, setEditingAddonPriceId] = useState<number | null>(null);
   const [currentEditingAddonPrice, setCurrentEditingAddonPrice] = useState<number | ''>('');
 
+  const [partnerPopoverOpen, setPartnerPopoverOpen] = useState(false);
+  const [partnerSearch, setPartnerSearch] = useState('');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -67,16 +72,45 @@ const CustomerForm = ({ onSuccess, onCancel }: CustomerFormProps) => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const partnersPromise = supabase.from('partners').select('id, name, company, portal_reseller_id, partner_discount, email').eq('onboarding_stage', 'onboarded');
+        const fetchAllPartners = async (): Promise<Partner[]> => {
+          let allPartnersData: Partner[] = [];
+          const CHUNK_SIZE = 1000;
+          let from = 0;
+          let hasMore = true;
+
+          while (hasMore) {
+            const { data, error } = await supabase
+              .from('partners')
+              .select('id, name, company, portal_reseller_id, partner_discount, email, partner_status')
+              .range(from, from + CHUNK_SIZE - 1);
+
+            if (error) {
+              console.error("Error fetching partners chunk:", error);
+              throw error;
+            }
+
+            if (data) {
+              allPartnersData = [...allPartnersData, ...data];
+            }
+
+            if (!data || data.length < CHUNK_SIZE) {
+              hasMore = false;
+            } else {
+              from += data.length;
+            }
+          }
+          return allPartnersData;
+        };
+
+        const partnersPromise = fetchAllPartners();
         const productsPromise = supabase.from('products').select('id, name, category, plans, product_type, status, price');
 
-        const [partnersResult, productsResponse] = await Promise.all([
+        const [partnersData, productsResponse] = await Promise.all([
           partnersPromise,
           productsPromise,
         ]);
 
-        if (partnersResult.error) throw new Error(`Supabase error: ${partnersResult.error.message}`);
-        setPartners(partnersResult.data || []);
+        setPartners(partnersData || []);
         
         if (productsResponse.error) throw new Error(`Supabase error: ${productsResponse.error.message}`);
         const allProducts = productsResponse.data || [];
@@ -206,6 +240,14 @@ const CustomerForm = ({ onSuccess, onCancel }: CustomerFormProps) => {
     const product = products.find(p => p.category === selectedOem && p.name === selectedProduct);
     return product?.plans || [];
   }, [products, selectedOem, selectedProduct]);
+
+  const filteredPartnersForSelect = useMemo(() => {
+    if (!partnerSearch) return partners;
+    return partners.filter(p =>
+      p.name.toLowerCase().includes(partnerSearch.toLowerCase()) ||
+      (p.company && p.company.toLowerCase().includes(partnerSearch.toLowerCase()))
+    );
+  }, [partners, partnerSearch]);
 
   const resetProductForm = () => {
     setSelectedOem(''); setSelectedProduct(''); setSelectedSku('');
@@ -439,18 +481,57 @@ const CustomerForm = ({ onSuccess, onCancel }: CustomerFormProps) => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="partner">Assign Partner</Label>
-              <Select value={formData.partnerId} onValueChange={(value) => setFormData({ ...formData, partnerId: value })} disabled={isLoading}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a partner" />
-                </SelectTrigger>
-                <SelectContent>
-                  {partners.map((partner) => (
-                    <SelectItem key={partner.id} value={partner.id}>
-                      {partner.name} - {partner.company}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Popover open={partnerPopoverOpen} onOpenChange={setPartnerPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={partnerPopoverOpen}
+                      className="w-full justify-between"
+                      disabled={isLoading}
+                    >
+                      {formData.partnerId
+                        ? partners.find((partner) => partner.id === formData.partnerId)?.name
+                        : "Select a partner"}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                    <Command>
+                      <CommandInput placeholder="Search partner..." onValueChange={setPartnerSearch} />
+                      <CommandEmpty>No partner found.</CommandEmpty>
+                      <CommandList>
+                        <CommandGroup>
+                          {filteredPartnersForSelect.map((partner) => (
+                            <CommandItem
+                              key={partner.id}
+                              value={`${partner.name} ${partner.company}`}
+                              onSelect={() => {
+                                setFormData({ ...formData, partnerId: partner.id });
+                                setPartnerPopoverOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn("mr-2 h-4 w-4", formData.partnerId === partner.id ? "opacity-100" : "opacity-0")}
+                              />
+                              <span>
+                                {partner.name} - {partner.company} -{' '}
+                                <span className="font-bold uppercase">{partner.partner_status}</span>
+                              </span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {formData.partnerId && (
+                  <Button variant="ghost" size="icon" onClick={() => setFormData({ ...formData, partnerId: '' })} title="Clear selection">
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
             {prospectType === 'existing' && (
               <div className="space-y-2 md:col-span-1">

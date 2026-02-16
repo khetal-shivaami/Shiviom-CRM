@@ -300,7 +300,7 @@ const allCustomerColumns = [
 
 const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false }: PartnerDetailsProps) => {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [partnerCustomers, setPartnerCustomers] = useState<Customer[]>([]);
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
   const [processFilter, setProcessFilter] = useState<string[]>(['all']);
@@ -323,6 +323,8 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
   const [drCaseRejectionReason, setDrCaseRejectionReason] = useState('');
   const [selectedDrCaseForAction, setSelectedDrCaseForAction] = useState<DRCase | null>(null);
   const [comments, setComments] = useState<PartnerComment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [isCommentsLoading, setIsCommentsLoading] = useState(true);
   const [discountHistory, setDiscountHistory] = useState<DiscountHistoryItem[]>([]);
   const [isDiscountHistoryLoading, setIsDiscountHistoryLoading] = useState(true);
@@ -1112,7 +1114,37 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
   const indexOfLastInvoiceDetail = invoiceHistoryDetailsPage * invoiceHistoryDetailsPerPage;
   const indexOfFirstInvoiceDetail = indexOfLastInvoiceDetail - invoiceHistoryDetailsPerPage;
   const currentInvoiceDetails = filteredInvoiceDetails.slice(indexOfFirstInvoiceDetail, indexOfLastInvoiceDetail);
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !user) {
+      toast({ title: "Comment cannot be empty", variant: "destructive" });
+      return;
+    }
+    setIsSubmittingComment(true);
+    try {
+      const creatorName = (profile?.first_name || profile?.last_name) ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : user.email;
+      const { error } = await supabase.from('partner_comments').insert({
+        partner_id: partner.id,
+        portal_reseller_id: partner.portal_reseller_id,
+        partner_name: partner.name,
+        comment: newComment,
+        created_by_name: creatorName,
+        created_by: user.id,
+      });
 
+      if (error) throw error;
+
+      toast({ title: "Comment Added", description: "Your comment has been saved." });
+      setNewComment('');
+      // Refetch comments
+      const { data } = await supabase.from('partner_comments').select('*').eq('portal_reseller_id', partner.portal_reseller_id).order('created_at', { ascending: false });
+      setComments((data || []).map(c => ({ ...c, created_at: new Date(c.created_at) })) as unknown as PartnerComment[]);
+
+    } catch (error: any) {
+      toast({ title: "Error adding comment", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
   useEffect(() => {
     const fetchPartnerCustomers = async () => {
       if (!partner.email) {
@@ -3152,7 +3184,9 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
                 ) : (
                   <div className="flex items-center gap-2">
                     <p className="font-medium">{partnerState.renewal_manager_name || 'Not Assigned'}</p>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsEditingRenewalManager(true)}><Edit size={14} className="text-muted-foreground" /></Button>
+                    {profile?.role === 'admin' && (
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsEditingRenewalManager(true)}><Edit size={14} className="text-muted-foreground" /></Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -3715,7 +3749,8 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
       >
         <Card>
           <CardHeader className="flex flex-row items-center justify-between cursor-pointer" onClick={() => setAuxiliaryDataOpen(!auxiliaryDataOpen)}>
-            <CardTitle>Comments & Discounts</CardTitle>
+            {/* <CardTitle>Comments & Discounts</CardTitle> */}
+            <CardTitle>Comments</CardTitle>
             <CollapsibleTrigger asChild>
               <Button variant="ghost" size="sm" className="w-9 p-0">
                 <ChevronDown className={cn("h-4 w-4 transition-transform", auxiliaryDataOpen && "rotate-180")} />
@@ -3751,11 +3786,23 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
                         </div>
                       ) : <div className="flex items-center justify-center h-full text-muted-foreground">No comments found.</div>}
                     </ScrollArea>
+                    <div className="mt-4 pt-4 border-t">
+                      <Label htmlFor="new-comment" className="mb-2 block">Add a comment</Label>
+                      <Textarea
+                        id="new-comment"
+                        placeholder="Type your comment here..."
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        rows={3}
+                        disabled={isSubmittingComment}
+                      />
+                      <Button onClick={handleAddComment} disabled={isSubmittingComment || !newComment.trim()} className="mt-2" size="sm">{isSubmittingComment ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Posting...</> : 'Post Comment'}</Button>
+                    </div>
                   </CardContent>
                 </Card>
 
                 {/* Discount History Card */}
-                <Card>
+                {/* <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
                       <History size={18} /> Discount History
@@ -3768,7 +3815,7 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
                       ) : discountHistory.length > 0 ? (
                         <div className="space-y-2">
                           {discountHistory.map((item, index) => (
-                            <div key={index} className="flex justify-between items-center text-sm p-2 rounded-md bg-muted/50"> {/* Assuming discount_in is a string like "10%" */}
+                            <div key={index} className="flex justify-between items-center text-sm p-2 rounded-md bg-muted/50">
                               <span className="font-semibold">{item.discount_in}%</span>
                               <span className="text-muted-foreground">{new Date(item.updated_on).toLocaleString()}</span>
                             </div>
@@ -3777,10 +3824,10 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
                       ) : <div className="flex items-center justify-center h-full text-muted-foreground">No discount history.</div>}
                     </ScrollArea>
                   </CardContent>
-                </Card>
+                </Card> */}
 
                 {/* Notes Card */}
-                {/* <Card>
+                <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
                       <StickyNote size={18} /> Notes
@@ -3794,7 +3841,7 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
     
                     </ScrollArea>
                   </CardContent>
-                </Card> */}
+                </Card>
               </div>
             </CardContent>
           </CollapsibleContent>

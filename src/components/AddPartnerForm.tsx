@@ -14,6 +14,7 @@ import UserAssignmentSelect from './UserAssignmentSelect';
 import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/config/api';
 import { Checkbox } from './ui/checkbox';
+import { ArrowLeft } from 'lucide-react';
 
 const identityOptions = [
   { id: 'web-app-developer', label: 'Web App Developer' },
@@ -91,6 +92,9 @@ const partnerSchema = z.object({
   partner_type: z.enum(['silver', 'gold']),
   source_of_partner: z.string().optional(),
   designation: z.string().optional().or(z.literal('')),
+  partner_status: z.enum(['activate_portal', 'on_hold'], {
+    required_error: "Partner status is required.",
+  }),
 });
 
 type PartnerFormData = z.infer<typeof partnerSchema>;
@@ -137,6 +141,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
       partner_type: 'silver',
       source_of_partner: 'webinar',
       designation: '',
+      partner_status: undefined,
     },
   });
 
@@ -185,6 +190,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
         partner_type: data.partner_type,
         source_of_partner: data.source_of_partner,
         designation: data.designation,
+        partner_status: data.partner_status,
       };
 
       const { error } = await supabase.from('partners').insert([newPartnerData]);
@@ -217,7 +223,13 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
   return (
     <Card className="w-full max-w-7xl mx-auto">
       <CardHeader>
-        <CardTitle>Add New Partner</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Add New Partner</CardTitle>
+          <Button variant="outline" onClick={onCancel}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Onboarding
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -338,6 +350,25 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                   <FormControl>
                     <Input placeholder="e.g., CEO, Sales Manager" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="partner_status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Partner Status *</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="Select partner status" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="activate_portal">Activate Portal</SelectItem>
+                      <SelectItem value="on_hold">On Hold</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

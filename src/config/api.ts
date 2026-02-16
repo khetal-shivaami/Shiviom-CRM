@@ -1,6 +1,6 @@
 // const API_BASE_URL = 'http://127.0.0.1:8000/';
 // const API_BASE_URL = 'https://portal-api.shiviom.com/';
-const API_BASE_URL = 'https://resellers-api.shiviom.com/';
+const API_BASE_URL = 'https://resellers-api.shiviom.com';
 
 export const API_ENDPOINTS = {
   // Subscriptions
@@ -60,7 +60,14 @@ export const API_ENDPOINTS = {
   // This endpoint is duplicated, keeping one for consistency with the component's usage
   GET_PRODUCTS_DATA_ONCRM : `${API_BASE_URL}/get_products_data_oncrm/`, 
   STORE_SKUWISE_DISCOUNT_ONCRM : `${API_BASE_URL}/store_skuwise_discount_oncrm/`, 
-  GET_SKUWISE_DISCOUNT_ONCRM : `${API_BASE_URL}/get_skuwise_discount_oncrm/`, 
+  GET_SKUWISE_DISCOUNT_ONCRM : `${API_BASE_URL}/get_skuwise_discount_oncrm/`,
+  SEND_BULK_RENEWAL_NOTIFICATION_FRMCRM : `${API_BASE_URL}/send_bulk_renewal_notification_frmcrm/`, 
+  STORE_PARTNER_DOMAIN_ONCRM : `${API_BASE_URL}/store_partner_domain_oncrm/`, 
+  GET_ALL_LOGS_DETAILS_ONCRM : `${API_BASE_URL}/get_all_logs_details_oncrm/`, 
+
+  GET_DOMAIN_LIST_OF_RESELLER_ADDLICENSE_ONCRM : `${API_BASE_URL}/get_domain_list_of_reseller_addlicense_oncrm/`, 
+  ADDGOOGLELICENSE_ONCRM : `${API_BASE_URL}/addGoogleLicense_oncrm/`, 
+  
   
 
 };

@@ -152,7 +152,9 @@ const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => {
       { id: 'reports', label: 'Reports', icon: FileText },
       { id: 'products', label: 'Products', icon: Package },
       { id: 'deployment', label: 'Deployment', icon: Rocket },
-      {
+      { id: 'transactions', label: 'Transactions', icon: FileText }, // Added Transactions module
+      { id: 'add-license', label: 'Add License', icon: KeyRound },
+      { 
         id: 'settings', 
         label: 'Settings', 
         icon: Settings,

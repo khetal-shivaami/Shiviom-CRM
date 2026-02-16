@@ -225,16 +225,37 @@ const PartnerTable = ({ customers, products, users }: PartnerTableProps) => {
       let page = 0;
       let hasMore = true;
 
+      // Get the logged-in user's session
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        throw userError;
+      }
+      console.log(userData)
+      const currentUser = userData.user;
+      const userRole = currentUser?.user_metadata?.role; // Assuming role is stored in user_metadata
+      const currentUserId = currentUser?.id;
+      const currentUserName = currentUser?.user_metadata?.full_name;
+
       while (hasMore) {
         const from = page * CHUNK_SIZE;
         const to = from + CHUNK_SIZE - 1;
 
-        const { data, error } = await supabase
+        let query = supabase
           .from('partners')
           .select('*')
           .eq('onboarding_stage', 'onboarded')
           .order('created_at', { ascending: false })
           .range(from, to);
+        console.log(userRole)
+        // Conditional filtering based on user role
+        if (userRole === 'Renewal' && currentUserId) {
+          query = query.eq('renewal_manager_id', currentUserId);
+          // Add your additional condition here. For example, to filter by a specific status:
+          // query = query.eq('status', 'active');
+        }
+
+        const { data, error } = await query;
+
 
         if (error) throw error;
 

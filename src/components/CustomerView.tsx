@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Customer, Partner, Product, User } from '../types';
 import CustomerDetail from './CustomerDetail';
 import { API_ENDPOINTS } from '@/config/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CustomerViewProps {
   partners: Partner[];
@@ -23,6 +24,7 @@ const CustomerView = ({
   users,
 }: CustomerViewProps) => {
   const { toast } = useToast();
+  const { user, profile } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,11 +52,17 @@ const CustomerView = ({
 
   useEffect(() => {
     const fetchCustomers = async () => {
+      if (!user || !profile) return;
       setLoading(true);
       setError(null);
       try {
+        const formData = new FormData();
+        formData.append('user_id', user.id);
+        formData.append('role', profile.role);
+
         const response = await fetch(API_ENDPOINTS.GET_RESELLER_CUSTOEMRS_LIST_ONCRM, {
           method: 'POST',
+          body: formData,
         });
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -102,7 +110,7 @@ const CustomerView = ({
     };
 
     fetchCustomers();
-  }, [toast, partners]);
+  }, [toast, partners, user, profile]);
 
   const getPartnerName = (partnerId?: string) => {
     if (!partners) {
