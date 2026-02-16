@@ -5,34 +5,42 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Mail, Phone, Building, MapPin } from 'lucide-react';
+import { Search, Mail, Phone, Building, MapPin, ChevronsUpDown, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Customer, Partner, Product, User } from '../types';
 import CustomerDetail from './CustomerDetail';
+import { DateRangePicker } from './DateRangePicker';
 import { API_ENDPOINTS } from '@/config/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { DateRange } from 'react-day-picker';
+import { supabase } from '@/integrations/supabase/client';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 
 interface CustomerViewProps {
-  partners: Partner[];
   products: Product[];
   users: User[];
 }
 
 const CustomerView = ({ 
-  partners, 
   products, 
   users,
 }: CustomerViewProps) => {
   const { toast } = useToast();
   const { user, profile } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [partnerFilter, setPartnerFilter] = useState('all');
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [progress, setProgress] = useState(10);
   const recordsPerPage = 20;
+  const [partnerPopoverOpen, setPartnerPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (loading) {
@@ -48,21 +56,33 @@ const CustomerView = ({
   useEffect(() => {
     // Reset to first page when search term changes
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, partnerFilter, dateRange]);
 
   useEffect(() => {
-    const fetchCustomers = async () => {
+    const fetchInitialData = async () => {
       if (!user || !profile) return;
       setLoading(true);
       setError(null);
       try {
-        const formData = new FormData();
-        formData.append('user_id', user.id);
-        formData.append('role', profile.role);
+        // Fetch partners from Supabase
+        const { data: partnersData, error: partnersError } = await supabase
+          .from('partners')
+          .select('*');
+
+        if (partnersError) {
+          throw partnersError;
+        }
+        setPartners(partnersData || []);
+        const localPartners = partnersData || [];
+
+        // Fetch customers from CRM API
+        const customerFormData = new FormData();
+        customerFormData.append('user_id', user.id);
+        customerFormData.append('role', profile.role);
 
         const response = await fetch(API_ENDPOINTS.GET_RESELLER_CUSTOEMRS_LIST_ONCRM, {
           method: 'POST',
-          body: formData,
+          body: customerFormData,
         });
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -73,9 +93,7 @@ const CustomerView = ({
         }
 
         const apiCustomers = result.data.data_result;
-
-        // Create a map for quick lookup of partner's Supabase ID from their portal ID
-        const partnerIdMap = new Map(partners.map(p => [p.portal_reseller_id, p.id]));
+        const partnerIdMap = new Map(localPartners.map(p => [p.portal_reseller_id, p.id]));
 
         const transformedData: Customer[] = apiCustomers.map((c: any) => {
           const supabasePartnerId = c.reseller_id ? partnerIdMap.get(c.reseller_id) : undefined;
@@ -89,28 +107,25 @@ const CustomerView = ({
             domainName: c.customer_domainname,
             partnerId: supabasePartnerId,
             createdAt: new Date(c.created_on),
-            // Default values for fields not present in the API response
             status: 'active',
             process: 'won',
             value: 0,
             productIds: [],
             assignedUserIds: [],
           };
-        }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort by creation date descending
+        }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-        if (transformedData) {
-          setCustomers(transformedData);
-        }
+        setCustomers(transformedData);
       } catch (err: any) {
         setError(err.message);
-        toast({ title: "Error", description: "Failed to load customer data.", variant: "destructive" });
+        toast({ title: "Error", description: "Failed to load data.", variant: "destructive" });
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCustomers();
-  }, [toast, partners, user, profile]);
+    fetchInitialData();
+  }, [toast, user, profile]);
 
   const getPartnerName = (partnerId?: string) => {
     if (!partners) {
@@ -122,17 +137,27 @@ const CustomerView = ({
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(customer => {
+      const partnerMatch = partnerFilter === 'all' || customer.partnerId === partnerFilter;
+
+      const dateMatch = !dateRange?.from || (
+        customer.createdAt >= dateRange.from &&
+        (!dateRange.to || customer.createdAt <= new Date(new Date(dateRange.to).setHours(23, 59, 59, 999)))
+      );
+
       const searchTermLower = searchTerm.toLowerCase();
       const partnerName = getPartnerName(customer.partnerId);
 
-      const matchesSearch = customer.name.toLowerCase().includes(searchTermLower) ||
+      const searchMatch = searchTerm === '' ||
+                           customer.name.toLowerCase().includes(searchTermLower) ||
                            customer.email.toLowerCase().includes(searchTermLower) ||
                            customer.company.toLowerCase().includes(searchTermLower) ||
                            customer.resellerName.toLowerCase().includes(searchTermLower) ||
+                           (customer.domainName && customer.domainName.toLowerCase().includes(searchTermLower)) ||
                            partnerName.toLowerCase().includes(searchTermLower);
-      return matchesSearch;
+
+      return partnerMatch && dateMatch && searchMatch;
     });
-  }, [customers, searchTerm, partners, getPartnerName]);
+  }, [customers, searchTerm, partnerFilter, dateRange, partners]);
 
   // Pagination logic
   const totalPages = Math.ceil(filteredCustomers.length / recordsPerPage);
@@ -286,14 +311,65 @@ const CustomerView = ({
       {/* Search */}
       <Card>
         <CardContent className="p-4">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search customers..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, domain, partner..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Popover open={partnerPopoverOpen} onOpenChange={setPartnerPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={partnerPopoverOpen}
+                  className="w-full md:w-[200px] justify-between"
+                >
+                  {partnerFilter === 'all'
+                    ? "All Partners"
+                    : partners.find((partner) => partner.id === partnerFilter)?.name || "Select partner..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                <Command>
+                  <CommandInput placeholder="Search partner..." />
+                  <CommandList>
+                    <CommandEmpty>No partner found.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="all"
+                        onSelect={() => {
+                          setPartnerFilter("all");
+                          setPartnerPopoverOpen(false);
+                        }}
+                      >
+                        <Check className={cn("mr-2 h-4 w-4", partnerFilter === "all" ? "opacity-100" : "opacity-0")} />
+                        All Partners
+                      </CommandItem>
+                      {partners.map((partner) => (
+                        <CommandItem
+                          key={partner.id}
+                          value={partner.name}
+                          onSelect={() => {
+                            setPartnerFilter(partner.id);
+                            setPartnerPopoverOpen(false);
+                          }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", partnerFilter === partner.id ? "opacity-100" : "opacity-0")} />
+                          {partner.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            <DateRangePicker date={dateRange} onDateChange={setDateRange} />
           </div>
         </CardContent>
       </Card>
