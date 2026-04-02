@@ -2651,8 +2651,8 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
       toast({ title: "Missing Information", description: "Please select an SKU and provide at least one discount value.", variant: "destructive" });
       return;
     }
-
-    const productInfo = allProducts.find(p => p.name === selectedProduct);
+    console.log(selectedOem)
+    const productInfo = allProducts.find(p => p.name === selectedOem);
     if (!productInfo) {
       toast({ title: "Error", description: "Selected product not found.", variant: "destructive" });
       return;
@@ -2738,9 +2738,7 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
       toast({ title: "Missing Information", description: "Please select an SKU and provide at least one discount value.", variant: "destructive" });
       return;
     }
-    console.log("allProducts", allProducts)
-    const productInfo = allProducts.find(p => p.name === selectedProduct);
-    console.log("prod", selectedSku)
+    const productInfo = allProducts.find(p => p.name === selectedProduct && p.oem === selectedOem);
     if (!productInfo) {
       toast({ title: "Error", description: "Selected product not found.", variant: "destructive" });
       return;

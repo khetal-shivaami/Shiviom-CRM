@@ -75,6 +75,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   const [isSendingAccess, setIsSendingAccess] = useState(false);
   const [invitationHistory, setInvitationHistory] = useState<InvitationHistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [selectedAgreement, setSelectedAgreement] = useState('');
   const [historySearchTerm, setHistorySearchTerm] = useState('');
   const [isShareDocsOpen, setIsShareDocsOpen] = useState(false);
   const [isSendingDocs, setIsSendingDocs] = useState(false);
@@ -191,17 +192,24 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   };
 
   useEffect(() => {
-    if (isShareAccessOpen) fetchInvitationHistory();
+    if (isShareAccessOpen) {
+      fetchInvitationHistory();
+    } else {
+      setSelectedPartnerForAccess(null);
+      setSelectedAgreement('');
+    }
   }, [isShareAccessOpen]);
 
-  const parseJsonArray = (value: any): string[] => {
+  const parseJsonSafe = (value: any): string[] => {
     if (Array.isArray(value)) return value;
-    if (typeof value === 'string') {
+    if (typeof value === 'string' && value.trim()) {
       try {
+        // Handles JSON strings like '["value1", "value2"]' or '"value1"'
         const parsed = JSON.parse(value);
-        return Array.isArray(parsed) ? parsed : [];
+        return Array.isArray(parsed) ? parsed : [String(parsed)];
       } catch (e) {
-        return [];
+        // Fallback for non-JSON strings (e.g., comma-separated "value1,value2" or a single "value1")
+        return value.split(',').map(s => s.trim());
       }
     }
     return [];
@@ -246,13 +254,14 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           company: p.company,
           phone: p.contact_number,
           specialization: p.specialization,          
-          identity: parseJsonArray(p.identity),
+          identity: parseJsonSafe(p.identity),
           status: p.status,
           agreementSigned: p.agreement_signed,
           agreementDate: p.agreement_date ? new Date(p.agreement_date) : undefined,
           productTypes: p.product_types || [],
           paymentTerms: p.payment_terms,
-          zone: p.zone,
+          zone: parseJsonSafe(p.zone),
+          partner_tag: parseJsonSafe(p.partner_tag),
           assignedUserIds: p.assigned_user_ids || [],
           createdAt: new Date(p.created_at),
           customersCount: p.customers_count || 0,
@@ -579,6 +588,10 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       toast({ title: "Partner Not Found", description: "The selected partner could not be found.", variant: "destructive" });
       return;
     }
+    if (documentsToShare.resellerAgreement && !selectedAgreement) {
+      toast({ title: "No Agreement Selected", description: "Please select a reseller service agreement.", variant: "destructive" });
+      return;
+    }
 
     setIsSendingDocs(true);
     try {
@@ -593,6 +606,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       const payload = {
         userEmail: partner.email,
         documents: selectedDocs,
+        agreement_name: documentsToShare.resellerAgreement ? selectedAgreement : null,
       };
 
       const response = await fetch(API_ENDPOINTS.SEND_RESELLER_ACCOUNT_DOCUMENTS, {
@@ -628,6 +642,10 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       toast({ title: "No Partner Selected", description: "Please select a partner to send access.", variant: "destructive" });
       return;
     }
+    if (!selectedAgreement) {
+      toast({ title: "No Agreement Selected", description: "Please select a reseller service agreement.", variant: "destructive" });
+      return;
+    }
     const partner = partnersData.find(p => p.id === selectedPartnerForAccess);
     if (!partner || !partner.email) {
       toast({ title: "Partner Not Found", description: "Could not find the selected partner's details or email.", variant: "destructive" });
@@ -641,7 +659,10 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ reseller_email: partner.email }),
+        body: JSON.stringify({
+          reseller_email: partner.email,
+          agreement_name: selectedAgreement
+        }),
       });
 
       const result = await response.json();
@@ -1075,6 +1096,19 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                 </Command>
               </PopoverContent>
             </Popover>
+            <div className="mt-4">
+              <Label htmlFor="agreement-type">Reseller Service Agreement</Label>
+              <Select value={selectedAgreement} onValueChange={setSelectedAgreement}>
+                <SelectTrigger id="agreement-type" className="w-full">
+                  <SelectValue placeholder="Select Agreement Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Reseller Service Agreement- Shiviom Cloud LLP-15 days">Reseller Service Agreement- Shiviom Cloud LLP-15 days</SelectItem>
+                  <SelectItem value="Reseller Service Agreement- Shiviom Cloud LLP-30 days">Reseller Service Agreement- Shiviom Cloud LLP-30 days</SelectItem>
+                  <SelectItem value="Reseller Service Agreement- Shiviom Cloud LLP-Due date">Reseller Service Agreement- Shiviom Cloud LLP-Due date</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="mt-6">
             <h4 className="text-lg font-semibold mb-2 flex items-center">
@@ -1138,7 +1172,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsShareAccessOpen(false)} disabled={isSendingAccess}>Cancel</Button>
-            <Button onClick={handleSendAccess} disabled={isSendingAccess || !selectedPartnerForAccess}>
+            <Button onClick={handleSendAccess} disabled={isSendingAccess || !selectedPartnerForAccess || !selectedAgreement}>
               {isSendingAccess && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Send
             </Button>
@@ -1146,7 +1180,15 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isShareDocsOpen} onOpenChange={setIsShareDocsOpen}>
+      <Dialog open={isShareDocsOpen} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedPartnerForDocs(null);
+          setDocumentsToShare({ kycForm: false, resellerAgreement: false });
+          setSelectedAgreement('');
+        }
+        setIsShareDocsOpen(open);
+      }
+      }>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Share Documents</DialogTitle>
@@ -1188,6 +1230,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                 </Command>
               </PopoverContent>
             </Popover>
+            
             <div className="grid gap-4 pt-4">
               <h4 className="text-sm font-medium">Select documents to share:</h4>
               <div className="flex items-center space-x-2">
@@ -1204,15 +1247,35 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                 <Checkbox
                   id="resellerAgreement"
                   checked={documentsToShare.resellerAgreement}
-                  onCheckedChange={(checked) => setDocumentsToShare((prev) => ({ ...prev, resellerAgreement: !!checked }))}
+                  onCheckedChange={(checked) => {
+                    setDocumentsToShare((prev) => ({ ...prev, resellerAgreement: !!checked }));
+                    if (!checked) {
+                      setSelectedAgreement('');
+                    }
+                  }}
                 />
                 <Label htmlFor="resellerAgreement" className="font-normal cursor-pointer">Reseller Service Agreement</Label>
               </div>
             </div>
+            {documentsToShare.resellerAgreement && (
+              <div className="mt-4">
+                <Label htmlFor="agreement-type-docs">Reseller Service Agreement</Label>
+                <Select value={selectedAgreement} onValueChange={setSelectedAgreement}>
+                  <SelectTrigger id="agreement-type-docs" className="w-full">
+                    <SelectValue placeholder="Select Agreement Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Reseller Service Agreement- Shiviom Cloud LLP-15 days">Reseller Service Agreement- Shiviom Cloud LLP-15 days</SelectItem>
+                    <SelectItem value="Reseller Service Agreement- Shiviom Cloud LLP-30 days">Reseller Service Agreement- Shiviom Cloud LLP-30 days</SelectItem>
+                    <SelectItem value="Reseller Service Agreement- Shiviom Cloud LLP-Due date">Reseller Service Agreement- Shiviom Cloud LLP-Due date</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsShareDocsOpen(false)} disabled={isSendingDocs}>Cancel</Button>
-            <Button onClick={handleShareDocuments} disabled={isSendingDocs || !selectedPartnerForDocs || (!documentsToShare.kycForm && !documentsToShare.resellerAgreement)}>
+            <Button onClick={handleShareDocuments} disabled={isSendingDocs || !selectedPartnerForDocs || (!documentsToShare.kycForm && !documentsToShare.resellerAgreement) || (documentsToShare.resellerAgreement && !selectedAgreement)}>
               {isSendingDocs && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Send
             </Button>

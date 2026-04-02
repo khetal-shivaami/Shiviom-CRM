@@ -948,10 +948,11 @@ const Quotations = () => {
                 <CardHeader><CardTitle>Products ({selectedQuotation.concatenated_products.length})</CardTitle></CardHeader>
                 <CardContent>
                   <Table>
-                    <TableHeader><TableRow><TableHead>Product</TableHead><TableHead>SKU Name</TableHead><TableHead>Users</TableHead><TableHead>Purchase Type</TableHead><TableHead>List Price</TableHead><TableHead>Product Discount(%)</TableHead><TableHead>Shiviom Price</TableHead><TableHead className="text-right">Subtotal</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Oem</TableHead><TableHead>Product</TableHead><TableHead>SKU Name</TableHead><TableHead>Users</TableHead><TableHead>Purchase Type</TableHead><TableHead>List Price</TableHead><TableHead>Product Discount(%)</TableHead><TableHead>Shiviom Price</TableHead><TableHead className="text-right">Subtotal</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {selectedQuotation.concatenated_products.map((p, i) => (
                         <TableRow key={i}>
+                          <TableCell>{p.oem_name}</TableCell>
                           <TableCell>{p.product_name}</TableCell>
                           <TableCell>{p.skuname}</TableCell>
                           <TableCell>{p.usercount}</TableCell>

@@ -94,6 +94,8 @@ export interface ProductPlan {
 }
 
 export interface Product {
+  oem_shortdesc: string;
+  short_description: string;
   id: string;
   name: string;
   website: string;
@@ -160,6 +162,7 @@ export interface UserHierarchy {
 }
 
 export interface Renewal {
+  renewal_person_name: any;
   id: string;
   customerId: string;
   partnerId: string;
@@ -174,6 +177,8 @@ export interface Renewal {
   notes?: string;
   price: number;
   revenue_amt: number;
+  usedSeats:string;
+  maxSeats:string;
 }
 
 export interface RenewalComment {

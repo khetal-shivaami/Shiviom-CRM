@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Download, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { Download, Upload, FileText, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Customer, Partner, Product, User } from '../types';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ScrollArea } from './ui/scroll-area';
 
 interface BulkImportDialogProps {
   type: 'customers' | 'partners' | 'products' | 'users';
@@ -21,6 +23,12 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
   const [isProcessing, setIsProcessing] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [success, setSuccess] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  // New states for preview
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [step, setStep] = useState(1); // 1: Upload, 2: Preview
 
   const sampleData = {
     customers: [
@@ -51,9 +59,10 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
       {
         name: 'Alex Johnson',
         email: 'alex@partner.com',
+        phone: '+1-555-0127',
         company: 'Partner Corp',
         specialization: 'Cloud Services',
-        identity: 'system-integrator',
+        identity: 'system-integrator,web-app-developer',
         status: 'active',
         agreementSigned: 'true',
         productTypes: 'Cloud,Security',
@@ -63,14 +72,16 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
       {
         name: 'Sarah Wilson',
         email: 'sarah@webdev.com',
+        phone: '+1-555-0128',
         company: 'WebDev Solutions',
         specialization: 'Digital Marketing',
-        identity: 'web-app-developer',
+        identity: 'digital-marketer',
         status: 'active',
         agreementSigned: 'false',
         productTypes: 'Marketing,Analytics',
         paymentTerms: 'net-60',
-        zone: 'south'
+        zone: 'south',
+        partner_tag: 'bni'
       }
     ],
     products: [
@@ -134,43 +145,18 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
       throw new Error('CSV must have at least a header row and one data row');
     }
 
-    const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+    const csvHeaders = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+    setHeaders(csvHeaders);
     const data = [];
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.replace(/"/g, '').trim());
       const row: any = {};
       
-      headers.forEach((header, index) => {
+      csvHeaders.forEach((header, index) => {
         const value = values[index] || '';
-        
-        // Handle different data types based on field names
-        if (header === 'value' || header === 'price' || header === 'customersCount' || header === 'totalValue') {
-          row[header] = parseFloat(value) || 0;
-        } else if (header === 'agreementSigned') {
-          row[header] = value.toLowerCase() === 'true';
-        } else if (header === 'productIds' || header === 'productTypes') {
-          row[header] = value ? value.split(',').map(s => s.trim()) : [];
-        } else {
-          row[header] = value;
-        }
+        row[header] = value;
       });
-
-      // Generate IDs and timestamps
-      row.id = `${type}_${Date.now()}_${i}`;
-      row.createdAt = new Date();
-      
-      // Set defaults for specific types
-      if (type === 'partners') {
-        row.customersCount = 0;
-        row.totalValue = 0;
-        if (row.agreementSigned) {
-          row.agreementDate = new Date();
-        }
-      } else if (type === 'products') {
-        row.customersCount = 0;
-      }
-
       data.push(row);
     }
 
@@ -215,28 +201,69 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
     setFile(uploadedFile);
     setErrors([]);
     setSuccess(false);
+
+    setIsProcessing(true);
+    try {
+      const text = await uploadedFile.text();
+      const data = processCSV(text);
+      setPreviewData(data);
+      setStep(2);
+    } catch (error) {
+      console.error('Preview error:', error);
+      setErrors([error instanceof Error ? error.message : 'Failed to process file for preview']);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const processImport = async () => {
-    if (!file) return;
+  const finalizeData = (data: any[]) => {
+    return data.map((row, i) => {
+      const finalRow: any = {};
+      for (const header in row) {
+        const value = row[header];
+        if (header === 'value' || header === 'price' || header === 'customersCount' || header === 'totalValue') {
+          finalRow[header] = parseFloat(value) || 0;
+        } else if (header === 'agreementSigned') {
+          finalRow[header] = value.toLowerCase() === 'true';
+        } else if (['productIds', 'productTypes', 'identity', 'zone', 'partner_tag'].includes(header)) {
+          finalRow[header] = value ? value.split(';').map(s => s.trim()) : [];
+        } else {
+          finalRow[header] = value;
+        }
+      }
+      finalRow.id = `${type}_${Date.now()}_${i}`;
+      finalRow.createdAt = new Date();
+      if (type === 'partners') {
+        finalRow.customersCount = finalRow.customersCount || 0;
+        finalRow.totalValue = finalRow.totalValue || 0;
+        if (finalRow.agreementSigned) {
+          finalRow.agreementDate = new Date();
+        }
+      } else if (type === 'products') {
+        finalRow.customersCount = 0;
+      }
+      return finalRow;
+    });
+  };
+
+  const handleConfirmImport = async () => {
+    if (previewData.length === 0) return;
 
     setIsProcessing(true);
     setErrors([]);
 
     try {
-      const text = await file.text();
-      const data = processCSV(text);
+      const finalData = finalizeData(previewData);
+      console.log(`Importing ${finalData.length} ${type} records:`, finalData);
       
-      console.log(`Processing ${data.length} ${type} records:`, data);
+      onImport(finalData);
+      setSuccess(true);
+      await logCrmAction("Bulk Import", `Imported ${finalData.length} records into ${type}.`);
       
-      onImport(data);
-            setSuccess(true);
-              await logCrmAction("Bulk Import", `Imported ${data.length} records into ${type}.`);
-      setFile(null);
-      
-      // Reset file input
-      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
+      setTimeout(() => {
+        resetState();
+        setOpen(false);
+      }, 2000);
       
     } catch (error) {
       console.error('Import error:', error);
@@ -246,22 +273,40 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
     }
   };
 
+  const resetState = () => {
+    setFile(null);
+    setIsProcessing(false);
+    setErrors([]);
+    setSuccess(false);
+    setPreviewData([]);
+    setHeaders([]);
+    setStep(1);
+  };
+
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (!isOpen) {
+      resetState();
+    }
+  };
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="outline" size="sm">
             <Upload size={16} className="mr-2" />
-            Bulk Import
+            Bulk Upload
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Bulk Import {type.charAt(0).toUpperCase() + type.slice(1)}</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4">
+        {step === 1 && (
+          <div className="space-y-4 py-4">
           <div>
             <Label className="text-sm font-medium">Step 1: Download Sample File</Label>
             <p className="text-sm text-muted-foreground mb-2">
@@ -274,7 +319,7 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
               className="w-full"
             >
               <Download size={16} className="mr-2" />
-              Download Sample CSV
+              Download Sample CSV for {type}
             </Button>
           </div>
 
@@ -288,24 +333,10 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
               accept=".csv"
               onChange={handleFileUpload}
               className="cursor-pointer"
+              disabled={isProcessing}
             />
+            {isProcessing && <p className="text-sm text-muted-foreground mt-2">Processing file...</p>}
           </div>
-
-          {file && (
-            <div className="flex items-center justify-between p-3 bg-muted rounded-md">
-              <div className="flex items-center gap-2">
-                <FileText size={16} />
-                <span className="text-sm">{file.name}</span>
-              </div>
-              <Button
-                size="sm"
-                onClick={processImport}
-                disabled={isProcessing}
-              >
-                {isProcessing ? 'Processing...' : 'Import'}
-              </Button>
-            </div>
-          )}
 
           {errors.length > 0 && (
             <Alert variant="destructive">
@@ -319,16 +350,51 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
               </AlertDescription>
             </Alert>
           )}
+          </div>
+        )}
 
-          {success && (
-            <Alert>
-              <CheckCircle size={16} />
-              <AlertDescription>
-                Data imported successfully!
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
+        {step === 2 && (
+          <div className="space-y-4 py-4">
+            <h3 className="font-semibold">Step 3: Preview and Confirm</h3>
+            <p className="text-sm text-muted-foreground">
+              Review the data below. If it looks correct, click "Confirm Import".
+            </p>
+            <ScrollArea className="h-72 w-full rounded-md border">
+              <Table>
+                <TableHeader className="sticky top-0 bg-muted">
+                  <TableRow>
+                    {headers.map(header => <TableHead key={header}>{header}</TableHead>)}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {previewData.map((row, rowIndex) => (
+                    <TableRow key={rowIndex}>
+                      {headers.map(header => <TableCell key={`${rowIndex}-${header}`}>{row[header]}</TableCell>)}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+
+            {success && (
+              <Alert>
+                <CheckCircle size={16} />
+                <AlertDescription>
+                  Data imported successfully! This dialog will close shortly.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setStep(1)} disabled={isProcessing}>
+                <ArrowLeft size={16} className="mr-2" /> Back to Upload
+              </Button>
+              <Button onClick={handleConfirmImport} disabled={isProcessing || success}>
+                {isProcessing ? 'Importing...' : `Confirm Import (${previewData.length} records)`}
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

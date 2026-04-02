@@ -48,6 +48,12 @@ const ProductTableRow = ({ product, currentUserRole, isSelected, onSelect, onSta
     onProductClick(product);
   };
 
+  const handleOemClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log(product.oem);
+    onProductClick(product);
+  };
+
   const plans = Array.isArray(product.plans) ? product.plans : [];
   const isInactive = product.status === 'inactive';
 
@@ -67,10 +73,15 @@ const ProductTableRow = ({ product, currentUserRole, isSelected, onSelect, onSta
         </TableCell>
       )}
       <TableCell className="font-medium">
-        <div className={`font-semibold ${isInactive ? 'text-muted-foreground' : ''}`}>
+        <div className={`font-semibold ${isInactive ? 'text-muted-foreground' : ''}`} >
           {product.name}
           {isInactive && <span className="ml-2 text-xs text-red-600">(Inactive)</span>}
         </div>
+        {product.oem && (
+          <div className="text-xs text-muted-foreground hover:underline" onClick={handleOemClick}>
+            by {product.oem}
+          </div>
+        )}
       </TableCell>
       <TableCell>
         {plans.length > 1 ? (

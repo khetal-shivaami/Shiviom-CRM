@@ -486,18 +486,20 @@ const CustomerDetailDialog = ({
                               <p className="text-muted-foreground">{subDetails.plan}</p>
                             </div>
                           </div>
-                          <div className="flex items-start gap-3">
+                          {/* Combined Used Seats and Max Seats into License Count */}
+                          <div className="flex items-start gap-3"> 
                             <Users2 size={18} className="text-muted-foreground mt-1" />
                             <div>
-                              <p className="font-medium">Used Seats</p>
-                              <p className="text-muted-foreground">{subDetails.usedSeats}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-start gap-3">
-                            <UserCheck size={18} className="text-muted-foreground mt-1" />
-                            <div>
-                              <p className="font-medium">Max Seats</p>
-                              <p className="text-muted-foreground">{subDetails.maxSeats}</p>
+                              <p className="font-medium">License Count</p>
+                              <p className="text-muted-foreground">
+                                {subDetails.plan?.toUpperCase() === 'FLEXIBLE' ? (
+                                  `${subDetails.usedSeats || 'N/A'}`
+                                ) : subDetails.plan?.toUpperCase() === 'ANNUAL' ? (
+                                  `${subDetails.maxSeats || 'N/A'}`
+                                ) : (
+                                  'N/A'
+                                )}
+                              </p>
                             </div>
                           </div>
                         </CardFooter>

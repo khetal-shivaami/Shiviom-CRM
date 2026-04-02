@@ -26,6 +26,9 @@ interface SubscriptionForLicense {
   status: string;
   renewalDate?: Date;
   custId: string;
+  resellerName?: string; // Add resellerName
+  resellerEmail?: string; // Add resellerEmail
+  resellerType?: string; // Add resellerType
 }
 
 const AddLicense: React.FC = () => {
@@ -38,6 +41,8 @@ const AddLicense: React.FC = () => {
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [partnerSearch, setPartnerSearch] = useState('');
+  const [domainSearch, setDomainSearch] = useState('');
+  const [showResults, setShowResults] = useState(false);
   const [openPartnerPopover, setOpenPartnerPopover] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSubscription, setSelectedSubscription] = useState<SubscriptionForLicense | null>(null);
@@ -84,57 +89,89 @@ const AddLicense: React.FC = () => {
     fetchPartners();
   }, [toast]);
 
-  // Fetch customers when a partner is selected
-  useEffect(() => {
-    const fetchSubscriptions = async () => {
-      const selectedPartner = partners.find(p => p.id === selectedPartnerId);
-      if (!selectedPartner || !selectedPartner.email) {
+  const fetchSubscriptions = async (params: { partnerEmail?: string; domainName?: string }) => {
+    if (!params.partnerEmail && !params.domainName) {
+      setSubscriptions([]);
+      setShowResults(false);
+      return;
+    }
+
+    setIsLoadingCustomers(true);
+    setShowResults(true); // Show the results card with loading indicator
+    try {
+      let apiUrl = '';
+      const formData = new FormData();
+      if (params.partnerEmail) {
+        formData.append('reseller_email', params.partnerEmail);
+        apiUrl = API_ENDPOINTS.GET_DOMAIN_LIST_OF_RESELLER_ADDLICENSE_ONCRM;
+      }
+      if (params.domainName) {
+        formData.append('domain_name', params.domainName);
+        apiUrl = API_ENDPOINTS.GET_DOMAIN_OF_RESELLER_ADDLICENSE_ONCRM; // Use the specified API for domain search
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        body: formData,
+      });
+
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const result = await response.json();
+      if (!result.success || !result.data || result.data.length === 0) {
         setSubscriptions([]);
+        if (params.domainName) { // Only show "not found" for explicit domain searches
+          toast({ title: "Not Found", description: result.message || "No subscription found for the given domain.", variant: "default" });
+        }
         return;
       }
 
-      setIsLoadingCustomers(true);
-      try {
-        const formData = new FormData();
-        formData.append('reseller_email', selectedPartner.email);
-
-        const response = await fetch(API_ENDPOINTS.GET_DOMAIN_LIST_OF_RESELLER_ADDLICENSE_ONCRM, {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-        const result = await response.json();
-        if (!result.success || !result.data) {
-          throw new Error('Invalid API response structure for customers');
-        }
-
-        const apiSubscriptions = result.data;
-        const mappedSubscriptions: SubscriptionForLicense[] = apiSubscriptions.map((sub: any) => ({
-          id: sub.subscriptionid,
-          custId: sub.domainname || sub.subscription_details?.customerDomain,
-          skuName: sub.subscription_details?.skuName || 'N/A',
-          domainName: sub.domainname || sub.subscription_details?.customerDomain,
-          plan: sub.subscription_details?.plan || 'N/A',
-          usedSeats: sub.subscription_details?.usedSeats || 'N/A',
-          maxSeats: sub.subscription_details?.maxSeats || 'N/A',
-          status: sub.subscription_details?.status || 'UNKNOWN',
-          renewalDate: sub.subscription_details?.shivaami_renewal_date ? new Date(sub.subscription_details.shivaami_renewal_date) : undefined,
-        }));
-        setSubscriptions(mappedSubscriptions);
-      } catch (error: any) {
-        toast({ title: "Error fetching partner's subscriptions", description: error.message, variant: "destructive" });
-        setSubscriptions([]);
-      } finally {
-        setIsLoadingCustomers(false);
-      }
-    };
-
-    if (selectedPartnerId) {
-      fetchSubscriptions();
+      const apiSubscriptions = result.data;
+      const mappedSubscriptions: SubscriptionForLicense[] = apiSubscriptions.map((sub: any) => ({
+        id: sub.subscriptionid,
+        custId: sub.domainname || sub.subscription_details?.customerDomain,
+        skuName: sub.subscription_details?.skuName || 'N/A',
+        domainName: sub.domainname || sub.subscription_details?.customerDomain,
+        plan: sub.subscription_details?.plan || 'N/A',
+        usedSeats: sub.subscription_details?.usedSeats || 'N/A',
+        maxSeats: sub.subscription_details?.maxSeats || 'N/A',
+        status: sub.subscription_details?.status || 'UNKNOWN',
+        renewalDate: sub.subscription_details?.shivaami_renewal_date ? new Date(sub.subscription_details.shivaami_renewal_date) : undefined,
+        resellerName: sub.reseller_details?.reseller_name || 'N/A', // Map reseller name
+        resellerEmail: sub.reseller_details?.reseller_email || 'N/A', // Map reseller email
+        resellerType: sub.reseller_details?.reseller_type || 'N/A', // Map reseller email
+      }));
+      setSubscriptions(mappedSubscriptions);
+    } catch (error: any) {
+      toast({ title: "Error fetching subscriptions", description: error.message, variant: "destructive" });
+      setSubscriptions([]);
+    } finally {
+      setIsLoadingCustomers(false);
     }
-  }, [selectedPartnerId, partners, toast]);
+  };
+
+  const handleDomainSearch = () => {
+    if (domainSearch.trim()) {
+      setSelectedPartnerId(null);
+      fetchSubscriptions({ domainName: domainSearch.trim() });
+    }
+  };
+
+  // Fetch customers when a partner is selected
+  useEffect(() => {
+    const selectedPartner = partners.find(p => p.id === selectedPartnerId);
+    if (selectedPartner?.email) {
+      setDomainSearch(''); // clear domain search
+      fetchSubscriptions({ partnerEmail: selectedPartner.email });
+    } else {
+      // This part is tricky. If I just cleared the partner to do a domain search, I don't want to hide results.
+      if (!domainSearch.trim()) { // Only hide if domain search is also empty
+        setSubscriptions([]);
+        setShowResults(false);
+      }
+    }
+  }, [selectedPartnerId, partners]);
 
   useEffect(() => {
     // Reset to first page when search term or partner changes
@@ -199,7 +236,7 @@ const AddLicense: React.FC = () => {
   };
 
   const handleConfirmAddLicense = async () => {
-    if (licensesToAdd === '' || Number(licensesToAdd) < 0) {
+    if (licensesToAdd === '' || Number(licensesToAdd) <= 0) {
       toast({ title: "Invalid quantity", description: "Please enter a valid number of licenses to add.", variant: "destructive" });
       return;
     }
@@ -263,74 +300,101 @@ const AddLicense: React.FC = () => {
       <Card>
         <CardHeader>
           <CardTitle>Add License</CardTitle>
-          <p className="text-muted-foreground">Select a partner to view their domains and add licenses.</p>
+          <p className="text-muted-foreground">Select a partner or search by domain to view subscriptions and add licenses.</p>
         </CardHeader>
         <CardContent>
-          <div className="max-w-md space-y-2">
-            <label htmlFor="partner-select" className="text-sm font-medium">Select Partner</label>
-            <div className="flex items-center gap-2">
-              <Popover open={openPartnerPopover} onOpenChange={setOpenPartnerPopover}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={openPartnerPopover}
-                    className="w-full justify-between"
-                    disabled={isLoadingPartners}
-                  >
-                    {selectedPartnerId
-                      ? partners.find((partner) => partner.id === selectedPartnerId)?.name
-                      : (isLoadingPartners ? "Loading partners..." : "Select a partner")}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <div className="grid md:grid-cols-2 gap-4 max-w-4xl">
+            <div className="space-y-2">
+              <label htmlFor="partner-select" className="text-sm font-medium">Search by Partner</label>
+              <div className="flex items-center gap-2">
+                <Popover open={openPartnerPopover} onOpenChange={setOpenPartnerPopover}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openPartnerPopover}
+                      className="w-full justify-between"
+                      disabled={isLoadingPartners}
+                    >
+                      {selectedPartnerId
+                        ? partners.find((partner) => partner.id === selectedPartnerId)?.name
+                        : (isLoadingPartners ? "Loading partners..." : "Select a partner")}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                    <Command>
+                      <CommandInput placeholder="Search partner by name, company, or email..." onValueChange={setPartnerSearch} />
+                      <CommandEmpty>No partner found.</CommandEmpty>
+                      <CommandList>
+                        <CommandGroup>
+                          {filteredPartnersForSelect.map((partner) => (
+                            <CommandItem
+                              key={partner.id}
+                              value={`${partner.name} ${partner.company} ${partner.email}`}
+                              onSelect={() => {
+                                setSelectedPartnerId(partner.id);
+                                setDomainSearch('');
+                                setOpenPartnerPopover(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedPartnerId === partner.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div>
+                                <div>{partner.name} ({partner.company})</div>
+                                <div className="text-xs text-muted-foreground">{partner.email}</div>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {selectedPartnerId && (
+                  <Button variant="ghost" size="icon" onClick={() => { setSelectedPartnerId(null); }} title="Clear selection">
+                    <X className="h-4 w-4" />
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                  <Command>
-                    <CommandInput placeholder="Search partner by name, company, or email..." onValueChange={setPartnerSearch} />
-                    <CommandEmpty>No partner found.</CommandEmpty>
-                    <CommandList>
-                      <CommandGroup>
-                        {filteredPartnersForSelect.map((partner) => (
-                          <CommandItem
-                            key={partner.id}
-                            value={`${partner.name} ${partner.company} ${partner.email}`}
-                            onSelect={() => {
-                              setSelectedPartnerId(partner.id);
-                              setOpenPartnerPopover(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedPartnerId === partner.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            <div>
-                              <div>{partner.name} ({partner.company})</div>
-                              <div className="text-xs text-muted-foreground">{partner.email}</div>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              {selectedPartnerId && (
-                <Button variant="ghost" size="icon" onClick={() => setSelectedPartnerId(null)} title="Clear selection">
-                  <X className="h-4 w-4" />
+                )}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="domain-search" className="text-sm font-medium">Search by Domain</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="domain-search"
+                  placeholder="e.g., example.com"
+                  value={domainSearch}
+                  onChange={(e) => setDomainSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleDomainSearch(); }}
+                />
+                {domainSearch && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => { setDomainSearch(''); setShowResults(false); setSubscriptions([]); }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button onClick={handleDomainSearch}>
+                  <Search className="h-4 w-4" />
                 </Button>
-              )}
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {selectedPartnerId && (
+      {showResults && (
         <Card>
           <CardHeader>
             <CardTitle>
-              Partner Domains
+              Subscriptions
               {!isLoadingCustomers && subscriptions.length > 0 && (
                 <span className="text-muted-foreground font-normal text-base ml-2">
                   ({customerSearchTerm ? `${filteredSubscriptions.length} of ` : ''}{subscriptions.length})
@@ -365,6 +429,9 @@ const AddLicense: React.FC = () => {
                       <TableHead>Max Seats</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Renewal Date</TableHead>
+                      <TableHead>Reseller Name</TableHead> {/* New column */}
+                      <TableHead>Reseller EmailID</TableHead> {/* New column */}
+                      <TableHead>Domain Type</TableHead> {/* New column */}
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -378,6 +445,9 @@ const AddLicense: React.FC = () => {
                         <TableCell>{sub.maxSeats}</TableCell>
                         <TableCell>{sub.status}</TableCell>
                         <TableCell>{sub.renewalDate ? sub.renewalDate.toLocaleDateString() : 'N/A'}</TableCell>
+                        <TableCell>{sub.resellerName}</TableCell> {/* Display reseller name */}
+                        <TableCell>{sub.resellerEmail}</TableCell> {/* Display reseller email */}
+                        <TableCell>{sub.resellerType}</TableCell> {/* Display reseller typr */}
                         <TableCell className="text-right">
                           <Button variant="outline" size="sm" onClick={() => handleAddLicenseClick(sub.id)}>
                             <PlusCircle className="mr-2 h-4 w-4" />
@@ -411,7 +481,9 @@ const AddLicense: React.FC = () => {
             <DialogHeader>
               <DialogTitle>Add License</DialogTitle>
               <DialogDescription>
-                Add more licenses for the selected subscription.
+                {selectedSubscription.plan.toLowerCase().includes('flexible')
+                  ? 'Adding licenses is not applicable for flexible plans.'
+                  : 'Add more licenses for the selected subscription.'}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -443,13 +515,14 @@ const AddLicense: React.FC = () => {
                   value={licensesToAdd}
                   onChange={(e) => setLicensesToAdd(e.target.value)}
                   className="col-span-3"
-                  min="0"
+                  min="1"
+                  disabled={selectedSubscription.plan.toLowerCase().includes('flexible')}
                 />
               </div>
             </div>
             <DialogFooter>
               <Button variant="secondary" onClick={() => setIsAddLicenseModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
-              <Button onClick={handleConfirmAddLicense} disabled={licensesToAdd === '' || Number(licensesToAdd) < 0 || isSubmitting}>
+              <Button onClick={handleConfirmAddLicense} disabled={selectedSubscription.plan.toLowerCase().includes('flexible') || licensesToAdd === '' || Number(licensesToAdd) <= 0 || isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Add
               </Button>

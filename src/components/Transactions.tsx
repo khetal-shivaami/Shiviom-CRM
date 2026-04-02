@@ -13,9 +13,11 @@ import { DateRange } from 'react-day-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 export interface LicTransaction {
+  username: string;
   reseller_name: string;
   tid: number;
   status: string;
@@ -95,6 +97,7 @@ const Transactions: React.FC = () => {
   const [selectedLogType, setSelectedLogType] = useState<'licTransaction' | 'apiLog' | 'externalApiLog' | 'loginLog' | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [domainSearchTerm, setDomainSearchTerm] = useState('');
+  const [invoiceFilter, setInvoiceFilter] = useState('all');
 
   const handleRowClick = (
     logData: LicTransaction | ApiLogDetail | ExternalApiLogDetail | LoginLogDetail,
@@ -179,6 +182,7 @@ const Transactions: React.FC = () => {
       "Transaction Execution Date": new Date(transaction.transactionExecutionDate).toLocaleString(),
       "Transaction For": transaction.transactionFor,
       "Created On": new Date(transaction.createdon.replace(/(\d{2})-(\d{2})-(\d{4})_(\d{2})-(\d{2})-(\d{2})/, '$3-$2-$1T$4:$5:$6')).toLocaleString(),
+      "Created By": transaction.username || transaction.reseller_name,
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -215,6 +219,7 @@ const Transactions: React.FC = () => {
       "Transaction Execution Date": new Date(transaction.transactionExecutionDate).toLocaleString(),
       "Transaction For": transaction.transactionFor,
       "Created On": new Date(transaction.createdon.replace(/(\d{2})-(\d{2})-(\d{4})_(\d{2})-(\d{2})-(\d{2})/, '$3-$2-$1T$4:$5:$6')).toLocaleString(),
+      "Created By": transaction.username || transaction.reseller_name,
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -245,8 +250,12 @@ const Transactions: React.FC = () => {
       );
     }
 
+    if (invoiceFilter === 'pending') {
+      transactions = transactions.filter(t => !t.zoho_invoice_number);
+    }
+
     return transactions;
-  }, [licTransactions, dateRange, domainSearchTerm]);
+  }, [licTransactions, dateRange, domainSearchTerm, invoiceFilter]);
 
   const filteredApiLogs = useMemo(() => {
     if (!dateRange?.from) return apiLogs;
@@ -422,6 +431,15 @@ const Transactions: React.FC = () => {
                 className="pl-10 w-[300px]"
               />
             </div>
+            <Select value={invoiceFilter} onValueChange={setInvoiceFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filter by Invoice" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Invoices</SelectItem>
+                <SelectItem value="pending">Pending Invoice</SelectItem>
+              </SelectContent>
+            </Select>
             <Button onClick={handleGetReport} disabled={isLoading}>
               Get Report
             </Button>
@@ -495,8 +513,8 @@ const Transactions: React.FC = () => {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Mode</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transaction For</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transaction Date</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added By Reseller</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added By Shivaami Engineer</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
+                  
                   
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan Name</th>
                   
@@ -515,8 +533,7 @@ const Transactions: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{transaction.paymentmode}</td>
                     <td className="px-6 py-4 text-sm text-gray-900 max-w-xs break-words">License Addition</td>
                     <td className="px-6 py-4 text-sm text-gray-900 max-w-xs break-words">{new Date(transaction.createdon.replace(/(\d{2})-(\d{2})-(\d{4})_(\d{2})-(\d{2})-(\d{2})/, '$3-$2-$1T$4:$5:$6')).toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{transaction.reseller_name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">N/A</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{transaction.username || transaction.reseller_name}</td>
                     <td className="px-6 py-4 text-sm text-gray-900 max-w-xs break-words">{transaction.skuid}</td>
                     
                     

@@ -1,10 +1,12 @@
 
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, ExternalLink, Users, Edit2 } from 'lucide-react';
 import { Product } from '../types';
 import PlanManagementDialog from './PlanManagementDialog';
+import ProductForm from './ProductForm';
 
 interface ProductDetailProps {
   product: Product;
@@ -13,6 +15,22 @@ interface ProductDetailProps {
 }
 
 const ProductDetail = ({ product, onBack, onDataRefresh }: ProductDetailProps) => {
+  const [isEditing, setIsEditing] = useState(false);
+
+  const handleEditClick = () => {
+    console.log(product.name);
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+  };
+
+  const handleEditSuccess = () => {
+    setIsEditing(false);
+    onDataRefresh();
+  };
+
   const getBillingBadgeColor = (billing: string) => {
     switch (billing) {
       case 'monthly': return 'bg-blue-100 text-blue-800';
@@ -35,12 +53,30 @@ const ProductDetail = ({ product, onBack, onDataRefresh }: ProductDetailProps) =
   const sortedPlans = [...plans].sort((a, b) => a.price - b.price);
   const isInactive = product.status === 'inactive';
 
+  if (isEditing) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-semibold">Edit Product</h2>
+          <Button variant="outline" onClick={handleCancelEdit}>
+            <ArrowLeft size={16} className="mr-2" />
+            Back to Details
+          </Button>
+        </div>
+        <ProductForm productToEdit={product} onSuccess={handleEditSuccess} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="outline" onClick={onBack}>
           <ArrowLeft size={16} className="mr-2" />
           Back to Products
+        </Button>
+        <Button onClick={handleEditClick}>
+          <Edit2 size={16} className="mr-2" /> Edit Details
         </Button>
       </div>
 

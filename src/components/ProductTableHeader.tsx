@@ -56,7 +56,7 @@ const ProductTableHeader = ({
     <CardHeader>
       <div className="flex items-center justify-between">
         <CardTitle>
-          Product Details ({filteredProducts.length} of {products.length})
+          OEM Details ({filteredProducts.length} of {products.length})
         </CardTitle>
         <div className="flex items-center gap-2">          
           {currentUserRole === 'admin' && (onAddProduct || onAddAddon || onCategoryAdded) && (

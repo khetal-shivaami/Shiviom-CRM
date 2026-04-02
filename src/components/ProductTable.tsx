@@ -47,6 +47,7 @@ const ProductTable = ({}: ProductTableProps) => {
 
       const mappedProducts: Product[] = data.map((p: any) => ({
         id: p.id,
+        oem: p.oem,
         name: p.name,
         website: p.website,
         category: p.category,
@@ -269,7 +270,7 @@ const ProductTable = ({}: ProductTableProps) => {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold">Add New Product</h2>
+          <h2 className="text-2xl font-semibold">Add New OEM</h2>
           <Button variant="outline" onClick={handleCancelAdd}>
             Back to Products
           </Button>
@@ -336,7 +337,7 @@ const ProductTable = ({}: ProductTableProps) => {
                     />
                   </TableHead>
                 )}
-                <TableHead>Software Name</TableHead>
+                <TableHead>OEM</TableHead>
                 <TableHead>Available Plans</TableHead>
                 <TableHead>Website</TableHead>
                 <TableHead>Category</TableHead>

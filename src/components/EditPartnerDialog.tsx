@@ -26,6 +26,7 @@ interface EditPartnerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  onLogAction?: (actiontype: string, details: string) => Promise<void>;
 }
 const identityOptions = [
   { id: 'web-app-developer', label: 'Web App Developer' },
@@ -87,7 +88,16 @@ const sourceOfPartnerOptions = [
 
 const parseJsonSafe = (value: any): string[] => {
   if (Array.isArray(value)) return value;
-  if (typeof value === 'string') { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch (e) { return []; } }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      // Handles JSON strings like '["value1", "value2"]' or '"value1"'
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [String(parsed)];
+    } catch (e) {
+      // Fallback for non-JSON strings (e.g., comma-separated "value1,value2" or a single "value1")
+      return value.split(',').map(s => s.trim());
+    }
+  }
   return [];
 };
 

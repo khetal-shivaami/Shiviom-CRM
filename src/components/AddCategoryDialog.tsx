@@ -66,7 +66,7 @@ const AddCategoryDialog = ({ open, onOpenChange, onSuccess }: AddCategoryDialogP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add New Product Category</DialogTitle>
+          <DialogTitle>Add New OEM Category</DialogTitle>
           <DialogDescription>Enter the name for the new category.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">

@@ -148,7 +148,7 @@ const ProductDetailsTab = ({ products, setProducts, categories, isAdmin = false 
           <CardHeader>
             <CardTitle>{editingProduct ? 'Edit Product' : 'Create New Product'}</CardTitle>
             <CardDescription>
-              Manage product details and information
+              Manage OEM details and information
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -228,7 +228,7 @@ const ProductDetailsTab = ({ products, setProducts, categories, isAdmin = false 
       {isAdmin && !isCreatingProduct && !editingProduct && (
         <Button onClick={() => setIsCreatingProduct(true)} className="gap-2">
           <Package size={16} />
-          Add New Product
+          Add New OEM
         </Button>
       )}
 

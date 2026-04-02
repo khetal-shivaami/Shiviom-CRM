@@ -65,6 +65,7 @@ const Renewals = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [grdMonthFilter, setGrdMonthFilter] = useState('all');
   const [srdMonthFilter, setSrdMonthFilter] = useState('all');
+  const [renewalPersonFilter, setRenewalPersonFilter] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [presetDateRange, setPresetDateRange] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -235,7 +236,8 @@ const Renewals = () => {
               productTypes: [],
               paymentTerms: 'net-30',
               renewal_manager_id: '',
-              renewal_manager_name: ''
+              renewal_manager_name: '',
+              partner_status: undefined
             });
           }
 
@@ -285,7 +287,11 @@ const Renewals = () => {
             status: item.status,
             notificationSent: false,
             price: parseFloat(item.price || 0),
-            revenue_amt: 0
+            revenue_amt: 0,
+            renewal_person_name: item.renewal_person_name,
+            usedSeats: item.usedSeats,
+            maxSeats: item.maxSeats,
+            planName: item.plan
           });
         });
 
@@ -311,7 +317,7 @@ const Renewals = () => {
   useEffect(() => {
     // Reset to first page when filters change
     setCurrentPage(1);
-  }, [statusFilter, partnerFilter, productFilter, customerFilter, dateFilter, searchTerm, grdMonthFilter, srdMonthFilter, presetDateRange, dateRange]);
+  }, [statusFilter, partnerFilter, productFilter, customerFilter, dateFilter, searchTerm, grdMonthFilter, srdMonthFilter, presetDateRange, dateRange, renewalPersonFilter]);
 
   useEffect(() => {
     const now = new Date();
@@ -401,6 +407,16 @@ const Renewals = () => {
     return Array.from(months).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
   }, [renewals]);
 
+  const availableRenewalPersons = useMemo(() => {
+    const persons = new Set<string>();
+    renewals.forEach(r => {
+      if (r.renewal_person_name) {
+        persons.add(r.renewal_person_name);
+      }
+    });
+    return Array.from(persons).sort();
+  }, [renewals]);
+
   const filteredPartnersForDropdown = useMemo(() => {
     if (!partnerSearchTerm) {
       return partners;
@@ -475,6 +491,9 @@ const Renewals = () => {
         if (renewalMonth !== srdMonthFilter) return false;
       }
 
+      // Renewal Person filter
+      if (renewalPersonFilter !== 'all' && renewal.renewal_person_name !== renewalPersonFilter) return false;
+
       
       // Search filter
       if (searchTerm) {
@@ -504,7 +523,7 @@ const Renewals = () => {
       }
       return true;
     });
-  }, [renewals, statusFilter, partnerFilter, productFilter, customerFilter, dateFilter, searchTerm, grdMonthFilter, srdMonthFilter, dateRange]);
+  }, [renewals, statusFilter, partnerFilter, productFilter, customerFilter, dateFilter, searchTerm, grdMonthFilter, srdMonthFilter, dateRange, renewalPersonFilter]);
   
   const groupedAndFilteredRenewals = useMemo(() => {
     const grouped: { [customerId: string]: Renewal[] } = {};
@@ -770,6 +789,7 @@ const Renewals = () => {
     setDateFilter('all');
     setGrdMonthFilter('all');
     setSrdMonthFilter('all');
+    setRenewalPersonFilter('all');
     setSearchTerm('');
     setPresetDateRange('all');
   };
@@ -1097,6 +1117,21 @@ const Renewals = () => {
                     </Select>
                   </div>
 
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Renewal Person</label>
+                    <Select value={renewalPersonFilter} onValueChange={setRenewalPersonFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Persons" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Persons</SelectItem>
+                        {availableRenewalPersons.map((person) => (
+                          <SelectItem key={person} value={person}>{person}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="col-span-full flex flex-wrap items-end gap-4 pt-2">
                     <div>
                       <label className="text-sm font-medium mb-2 block">Renewal Date Range</label>
@@ -1223,6 +1258,7 @@ const Renewals = () => {
                 <TableHead>Customer Domain</TableHead>
                 <TableHead>Products</TableHead>
                 <TableHead>Partner</TableHead>
+                <TableHead>Renewal Person</TableHead>
                 <TableHead>Next Renewal Date</TableHead>
                 <TableHead>Days Until Next</TableHead>
                 <TableHead>Total Value</TableHead>
@@ -1242,6 +1278,7 @@ const Renewals = () => {
 
                 const minRenewalDate = Math.min(...customerRenewals.map(r => r.renewalDate.getTime()));
                 const renewalsWithEarliestDate = customerRenewals.filter(r => r.renewalDate.getTime() === minRenewalDate);
+                const renewalPersonName = renewalsWithEarliestDate[0]?.renewal_person_name;
                 const productNamesForEarliestRenewal = renewalsWithEarliestDate.map(r => getProductName(r.productId));
 
                 const nextRenewalDate = new Date(minRenewalDate);
@@ -1296,6 +1333,7 @@ const Renewals = () => {
                         )}
                       </TableCell>
                       <TableCell>{getPartnerName(firstRenewal.partnerId)}</TableCell>
+                      <TableCell>{renewalPersonName || 'N/A'}</TableCell>
                       <TableCell>
                         {nextRenewalDate.toLocaleDateString()}
                         {productNamesForEarliestRenewal.length > 0 && (
@@ -1357,13 +1395,15 @@ const Renewals = () => {
                     {isExpanded && (
                       <TableRow className="bg-muted/10 hover:bg-muted/20">
                         <TableCell />
-                        <TableCell colSpan={9} className="p-2">
+                        <TableCell colSpan={10} className="p-2">
                           <div className="p-2 bg-background rounded-md border">
                             <h4 className="font-semibold mb-2 px-2">All Renewals for {customer?.domainName}</h4>
                             <Table>
                               <TableHeader>
                                 <TableRow>
                                   <TableHead>Product</TableHead>
+                                  <TableHead>Seats</TableHead>
+                                  <TableHead>Plan</TableHead>
                                   <TableHead>Renewal Date</TableHead>
                                   <TableHead>Days Left</TableHead>
                                   <TableHead>Value</TableHead>
@@ -1381,6 +1421,16 @@ const Renewals = () => {
                                   return (
                                     <TableRow key={renewal.id}>
                                       <TableCell>{getProductName(renewal.productId)}</TableCell>
+                                      <TableCell>
+                                        {renewal.planName?.toUpperCase() === 'FLEXIBLE' ? (
+                                          `${renewal.usedSeats != null ? renewal.usedSeats : 'N/A'}`
+                                        ) : renewal.planName?.toUpperCase() === 'ANNUAL' ? (
+                                          `${renewal.maxSeats != null ? renewal.maxSeats : 'N/A'}`
+                                        ) : (
+                                          'N/A'
+                                        )}
+                                      </TableCell>
+                                      <TableCell>{renewal.planName || 'N/A'}</TableCell>
                                       <TableCell>{renewal.renewalDate.toLocaleDateString()}</TableCell>
                                       <TableCell>
                                         <span className={`font-medium ${
@@ -1427,7 +1477,7 @@ const Renewals = () => {
                     )}
                     {expandedRenewalId && customerRenewals.some(r => r.id === expandedRenewalId) && (
                       <TableRow key={`${expandedRenewalId}-comments`} className="bg-muted/20 hover:bg-muted/20">
-                        <TableCell colSpan={10} className="p-0">
+                        <TableCell colSpan={11} className="p-0">
                           <div className="p-4">
                             <Card>
                               <CardHeader>
@@ -1477,7 +1527,7 @@ const Renewals = () => {
               {filteredRenewals.map((renewal) => (
                 expandedRenewalId === renewal.id && (
                   <TableRow key={`${renewal.id}-comments`} className="bg-muted/20 hover:bg-muted/20">
-                    <TableCell colSpan={10} className="p-0">
+                    <TableCell colSpan={11} className="p-0">
                       <div className="p-4">
                         <Card>
                           <CardHeader>

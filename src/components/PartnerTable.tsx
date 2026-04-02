@@ -405,12 +405,47 @@ const PartnerTable = ({ customers, products, users }: PartnerTableProps) => {
   };
 
   const handleBulkImport = async (importedData: any[]) => {
-    // TODO: This needs to be implemented with the new API
-    toast({
-      title: "Action Not Implemented",
-      description: "Bulk import via the API is not yet configured.",
-      variant: "destructive",
-    });
+    if (!importedData || importedData.length === 0) {
+        toast({ title: "No Data", description: "No data to import.", variant: "destructive" });
+        return;
+    }
+
+    try {
+        const partnersToInsert = importedData.map(p => ({
+            name: p.name,
+            email: p.email,
+            company: p.company,
+            contact_number: p.phone, // Assuming 'phone' from CSV maps to 'contact_number'
+            specialization: p.specialization,
+            identity: p.identity,
+            status: p.status || 'active',
+            agreement_signed: p.agreementSigned,
+            product_types: p.productTypes,
+            payment_terms: p.paymentTerms,
+            zone: p.zone,
+            partner_tag: p.partner_tag,
+            onboarding_stage: 'onboarded', // Set default onboarding stage
+        }));
+
+        const { error } = await supabase.from('partners').insert(partnersToInsert);
+
+        if (error) {
+            throw error;
+        }
+
+        toast({
+            title: "Import Successful",
+            description: `${importedData.length} partners have been imported successfully.`,
+        });
+
+        fetchPartners(); // Refresh the partner list
+    } catch (error: any) {
+        toast({
+            title: "Import Failed",
+            description: error.message || "An error occurred during the bulk import.",
+            variant: "destructive",
+        });
+    }
   };
 
   if (selectedPartner) {

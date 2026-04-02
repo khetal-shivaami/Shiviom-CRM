@@ -66,7 +66,18 @@ export const API_ENDPOINTS = {
   GET_ALL_LOGS_DETAILS_ONCRM : `${API_BASE_URL}/get_all_logs_details_oncrm/`, 
 
   GET_DOMAIN_LIST_OF_RESELLER_ADDLICENSE_ONCRM : `${API_BASE_URL}/get_domain_list_of_reseller_addlicense_oncrm/`, 
+  GET_DOMAIN_OF_RESELLER_ADDLICENSE_ONCRM : `${API_BASE_URL}/get_domain_of_reseller_addlicense_oncrm/`, 
   ADDGOOGLELICENSE_ONCRM : `${API_BASE_URL}/addGoogleLicense_oncrm/`, 
+
+
+  GET_OEM_LIST_ONCRM : `${API_BASE_URL}/get_oem_list_oncrm/`, 
+  GET_PRODUCT_LIST_ONCRM : `${API_BASE_URL}/get_product_list_oncrm/`, 
+  CERATE_NEW_PRODUCT_DETAILS_ONCRM : `${API_BASE_URL}/create_new_product_details_oncrm/`, 
+  GET_OEM_DETAILS : `${API_BASE_URL}/get_oem_details/`,
+  UPDATE_OEM_DETAILS_ONCRM : `${API_BASE_URL}/update_oem_details_oncrm/`,
+  INSERT_INTO_SKU_DETAILS_ONCRM : `${API_BASE_URL}/insert_new_sku_details_oncrm/`,
+  UPDATE_SKU_DETAILS_ONCRM : `${API_BASE_URL}/update_sku_details_oncrm/`,
+  CREATE_NEW_PRODUCT_ONCRM : `${API_BASE_URL}/create_new_product_oncrm/`,
   
   
 
