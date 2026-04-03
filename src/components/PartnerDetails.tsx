@@ -351,7 +351,16 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
     }
     return [];
   };
-  const initialPartnerState: Partner = { ...partner, identity: parseJsonSafe(partner.identity), zone: parseJsonSafe(partner.zone), partner_tag: parseJsonSafe(partner.partner_tag), partner_type: partner.partner_type || 'silver', source_of_partner: partner.source_of_partner };
+  const initialPartnerState: Partner = { 
+    ...partner, 
+    identity: parseJsonSafe(partner.identity), 
+    zone: parseJsonSafe(partner.zone), 
+    partner_tag: parseJsonSafe(partner.partner_tag), 
+    partner_type: partner.partner_type || 'silver', 
+    source_of_partner: partner.source_of_partner,
+    contacts: partner.contacts, // Ensure contacts are passed through
+    interactions: partner.interactions, // Ensure interactions are passed through
+  };
 
   const [isLoadingQuotations, setIsLoadingQuotations] = useState(true);
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);

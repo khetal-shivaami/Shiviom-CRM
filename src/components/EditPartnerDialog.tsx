@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
+  // useForm,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -7,6 +8,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,6 +21,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/config/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { useFieldArray } from 'react-hook-form';
+import { Plus, X } from 'lucide-react';
 
 interface EditPartnerDialogProps {
   partner: Partner;
@@ -86,6 +93,14 @@ const sourceOfPartnerOptions = [
   { value: 'management', label: 'Management' },
 ] as const;
 
+const interactionStatusOptions = [
+  { value: 'freshfollowup-connected', label: 'Fresh Follow-up - Connected' },
+  { value: 'followup-not-connected', label: 'Follow-up - Not Connected' },
+  { value: 'presentation', label: 'Presentation' },
+  { value: 'feedback', label: 'Feedback' },
+] as const;
+
+
 const parseJsonSafe = (value: any): string[] => {
   if (Array.isArray(value)) return value;
   if (typeof value === 'string' && value.trim()) {
@@ -100,6 +115,42 @@ const parseJsonSafe = (value: any): string[] => {
   }
   return [];
 };
+const partnerSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Please enter a valid email'),
+  company: z.string().min(2, 'Company name must be at least 2 characters'),
+  phone: z.string().optional(),
+  specialization: z.string().optional(),
+  identity: z.array(z.string()).optional(),
+  zone: z.array(z.string()).optional(),
+  paymentTerms: z.string().optional(),
+  assignedUserIds: z.array(z.string()).optional(),
+  productTypes: z.array(z.string()).optional(),
+  partner_program: z.string().optional(),
+  stage_owner: z.string().optional(),
+  partner_tag: z.array(z.string()).optional(),
+  partner_type: z.string().optional(),
+  source_of_partner: z.string().optional(),
+  designation: z.string().optional(),
+  contacts: z.array(z.object({
+    contactName: z.string().min(1, 'Contact name is required.'),
+    contactDesignation: z.string().optional().or(z.literal('')),
+    contactNumber: z.string().optional().or(z.literal('')),
+    contactEmail: z.string().email('Invalid email address.').optional().or(z.literal('')),
+  })).optional(),
+  interactions: z.array(z.object({
+    isrId: z.string().min(1, 'ISR is required.'),
+    contactPerson: z.string().min(1, 'Contact person is required.'),
+    designation: z.string().optional().or(z.literal('')),
+    contactNumber: z.string().optional().or(z.literal('')),
+    contactEmail: z.string().email('Invalid email address.').optional().or(z.literal('')),
+    status: z.enum(['freshfollowup-connected', 'followup-not-connected', 'presentation', 'feedback'], {
+      required_error: "Status is required.",
+    }),
+  })).optional(),
+});
+
+type PartnerFormData = z.infer<typeof partnerSchema>;
 
 export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSuccess }: EditPartnerDialogProps) => {
   const { toast } = useToast();
@@ -107,9 +158,40 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<Partial<Partner>>({});
 
+  const form = useForm<PartnerFormData>({
+    resolver: zodResolver(partnerSchema),
+    defaultValues: {},
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "contacts",
+  });
+
+  const { fields: interactionFields, append: appendInteraction, remove: removeInteraction } = useFieldArray({
+    control: form.control,
+    name: "interactions",
+  });
+
   useEffect(() => {
     if (partner) {
-      setFormData({
+      const contacts = typeof partner.contacts === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(partner.contacts);
+            } catch (e) { return []; }
+          })()
+        : (Array.isArray(partner.contacts) ? partner.contacts : []);
+      const interactions = typeof partner.interactions === 'string'
+        ? (() => {
+            try {
+              console.log("Parsing interactions from string:", partner.interactions);
+              return JSON.parse(partner.interactions); // Correctly parse partner.interactions
+            } catch (e) { return []; }
+          })()
+        : (Array.isArray(partner.interactions) ? partner.interactions : []);
+
+      form.reset({
         name: partner.name,
         email: partner.email,
         phone: partner.phone,
@@ -126,23 +208,12 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
         partner_type: partner.partner_type || 'silver',
         source_of_partner: partner.source_of_partner || 'webinar',
         designation: partner.designation || '',
+        contacts: contacts,
+        interactions: interactions,
       });
     }
-  }, [partner]);
+  }, [partner, form]);
 
-  const handleInputChange = (field: keyof Partner, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleMultiSelectChange = (field: 'identity' | 'zone' | 'partner_tag', value: string, checked: boolean) => {
-    setFormData(prev => {
-      const currentValues = (prev[field] as string[]) || [];
-      const newValues = checked
-        ? [...currentValues, value]
-        : currentValues.filter(item => item !== value);
-      return { ...prev, [field]: newValues };
-    });
-  };
 
   const handleAssignedUserChange = (userId: string, checked: boolean) => {
     setFormData(prev => {
@@ -179,28 +250,30 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
       console.error("Error logging CRM action:", error.message);
     }
   };
-  const handleSubmit = async () => {
+  const onSubmit = async (data: PartnerFormData) => {
     setIsSubmitting(true);
     try {
       const { error } = await supabase
         .from('partners')
         .update({
-          name: formData.name,
-          email: formData.email,
-          contact_number: formData.phone,
-          company: formData.company,
-          specialization: formData.specialization,
-          identity: formData.identity && (formData.identity as string[]).length > 0 ? JSON.stringify(formData.identity) : null,
-          zone: formData.zone && (formData.zone as string[]).length > 0 ? JSON.stringify(formData.zone) : null,
-          payment_terms: formData.paymentTerms,
-          assigned_user_ids: formData.assignedUserIds,
-          product_types: formData.productTypes,
-          partner_program: formData.partner_program,
-          stage_owner: formData.stage_owner === 'none' ? null : formData.stage_owner,
-          partner_tag: formData.partner_tag && (formData.partner_tag as string[]).length > 0 ? JSON.stringify(formData.partner_tag) : null,
-          partner_type: formData.partner_type,
-          source_of_partner: formData.source_of_partner,
-          designation: formData.designation,
+          name: data.name,
+          email: data.email,
+          contact_number: data.phone,
+          company: data.company,
+          specialization: data.specialization,
+          identity: data.identity && data.identity.length > 0 ? JSON.stringify(data.identity) : null,
+          zone: data.zone && data.zone.length > 0 ? JSON.stringify(data.zone) : null,
+          payment_terms: data.paymentTerms,
+          assigned_user_ids: data.assignedUserIds,
+          product_types: data.productTypes,
+          partner_program: data.partner_program,
+          stage_owner: data.stage_owner === 'none' ? null : data.stage_owner,
+          partner_tag: data.partner_tag && data.partner_tag.length > 0 ? JSON.stringify(data.partner_tag) : null,
+          partner_type: data.partner_type,
+          source_of_partner: data.source_of_partner,
+          designation: data.designation,
+          contacts: data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : null,
+          interactions: data.interactions && data.interactions.length > 0 ? JSON.stringify(data.interactions) : null,
         })
         .eq('id', partner.id);
 
@@ -235,192 +308,262 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
           <DialogTitle>Edit Partner: {partner.name}</DialogTitle>
           <DialogDescription>Update the details for this partner.</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Partner Name</Label>
-              <Input id="name" value={formData.name || ''} onChange={(e) => handleInputChange('name', e.target.value)} />
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <FormField control={form.control} name="name" render={({ field }) => (
+                <FormItem><Label>Partner Name</Label><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="company" render={({ field }) => (
+                <FormItem><Label>Company</Label><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="email" render={({ field }) => (
+                <FormItem><Label>Email</Label><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="company">Company</Label>
-              <Input id="company" value={formData.company || ''} onChange={(e) => handleInputChange('company', e.target.value)} />
+            <div className="grid grid-cols-3 gap-4">
+              <FormField control={form.control} name="phone" render={({ field }) => (
+                <FormItem><Label>Phone</Label><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="designation" render={({ field }) => (
+                <FormItem><Label>Designation</Label><FormControl><Input placeholder="e.g., CEO, Sales Manager" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="specialization" render={({ field }) => (
+                <FormItem><Label>Specialization</Label><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" value={formData.email || ''} onChange={(e) => handleInputChange('email', e.target.value)} />
+            <div className="grid grid-cols-3 gap-4">
+              <FormField control={form.control} name="partner_program" render={({ field }) => (
+                <FormItem><Label>Partner Program</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a program" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Referal Partner">Referral Partner</SelectItem><SelectItem value="Commited Partner">Committed Partner</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="paymentTerms" render={({ field }) => (
+                <FormItem><Label>Payment Terms</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Payment Terms" /></SelectTrigger></FormControl><SelectContent><SelectItem value="annual-in-advance">Annual in Advance</SelectItem><SelectItem value="monthly">Monthly</SelectItem><SelectItem value="quarterly">Quarterly</SelectItem><SelectItem value="half-yearly">Half Yearly</SelectItem><SelectItem value="net-15">Net 15</SelectItem><SelectItem value="net-30">Net 30</SelectItem><SelectItem value="net-45">Net 45</SelectItem><SelectItem value="net-60">Net 60</SelectItem><SelectItem value="net-90">Net 90</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="stage_owner" render={({ field }) => (
+                <FormItem><Label>Stage Owner</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a stage owner" /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Unassigned</SelectItem>{users.map((user) => (<SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
+              )} />
             </div>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input id="phone" value={formData.phone || ''} onChange={(e) => handleInputChange('phone', e.target.value)} />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="partner_type" render={({ field }) => (
+                <FormItem><Label>Partner Type</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger></FormControl><SelectContent><SelectItem value="silver">Silver</SelectItem><SelectItem value="gold">Gold</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="source_of_partner" render={({ field }) => (
+                <FormItem><Label>Source of Partner</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a source" /></SelectTrigger></FormControl><SelectContent>{sourceOfPartnerOptions.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
+              )} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="designation">Designation</Label>
-              <Input id="designation" value={formData.designation || ''} onChange={(e) => handleInputChange('designation', e.target.value)} placeholder="e.g., CEO, Sales Manager" />
-            </div>
-            {/* <div className="space-y-2">
-              <Label htmlFor="designation">Designation</Label>
-              <Input id="designation" value={formData.designation || ''} onChange={(e) => handleInputChange('designation', e.target.value)} placeholder="e.g., CEO, Sales Manager" />
-            </div> */}
-          <div className="space-y-2">
-            <Label htmlFor="specialization">Specialization</Label>
-            <Input id="specialization" value={formData.specialization || ''} onChange={(e) => handleInputChange('specialization', e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="partnerProgram">Partner Program</Label>
-            <Select value={formData.partner_program} onValueChange={(value) => handleInputChange('partner_program', value)}>
-              <SelectTrigger id="partnerProgram">
-                <SelectValue placeholder="Select a program" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Referal Partner">Referral Partner</SelectItem>
-                <SelectItem value="Commited Partner">Committed Partner</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="paymentTerms">Payment Terms</Label>
-            <Select value={formData.paymentTerms} onValueChange={(value) => handleInputChange('paymentTerms', value)}>
-              <SelectTrigger id="paymentTerms"><SelectValue placeholder="Select Payment Terms"/></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="annual-in-advance">Annual in Advance</SelectItem>
-                <SelectItem value="monthly">Monthly</SelectItem>
-                <SelectItem value="quarterly">Quarterly</SelectItem>
-                <SelectItem value="half-yearly">Half Yearly</SelectItem>
-                <SelectItem value="net-15">Net 15</SelectItem>
-                <SelectItem value="net-30">Net 30</SelectItem>
-                <SelectItem value="net-45">Net 45</SelectItem>
-                <SelectItem value="net-60">Net 60</SelectItem>
-                <SelectItem value="net-90">Net 90</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="stageOwner">Stage Owner</Label>
-            <Select
-              value={formData.stage_owner || 'none'}
-              onValueChange={(value) => handleInputChange('stage_owner', value)}
-            >
-              <SelectTrigger id="stageOwner">
-                <SelectValue placeholder="Select a stage owner" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Unassigned</SelectItem>
-                {users.map((user) => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-sm text-muted-foreground">
-              This user is responsible for the partner's current onboarding stage.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="partnerType">Partner Type</Label>
-            <Select value={formData.partner_type} onValueChange={(value) => handleInputChange('partner_type', value)}>
-              <SelectTrigger id="partnerType">
-                <SelectValue placeholder="Select a type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gold">Gold partner</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="sourceOfPartner">Source of Partner</Label>
-            <Select value={formData.source_of_partner} onValueChange={(value) => handleInputChange('source_of_partner', value)}>
-              <SelectTrigger id="sourceOfPartner">
-                <SelectValue placeholder="Select a source" />
-              </SelectTrigger>
-              <SelectContent>
-                {sourceOfPartnerOptions.map(option => (
-                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Partner Identity</Label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md">
-              {identityOptions.map((item) => (
-                <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
-                  <Checkbox
-                    id={`identity-${item.id}`}
-                    checked={(formData.identity as string[])?.includes(item.id)}
-                    onCheckedChange={(checked) => handleMultiSelectChange('identity', item.id, !!checked)}
-                  />
-                  <Label htmlFor={`identity-${item.id}`} className="font-normal">{item.label}</Label>
+            <FormField control={form.control} name="identity" render={({ field }) => (
+              <FormItem>
+                <Label>Partner Identity</Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md">
+                  {identityOptions.map((item) => (
+                    <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
+                      <Checkbox
+                        checked={field.value?.includes(item.id)}
+                        onCheckedChange={(checked) => {
+                          return checked
+                            ? field.onChange([...(field.value || []), item.id])
+                            : field.onChange(field.value?.filter((value) => value !== item.id));
+                        }}
+                      />
+                      <Label className="font-normal">{item.label}</Label>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Zone (Optional)</Label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md">
-              {zoneOptions.map((item) => (
-                <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
-                  <Checkbox
-                    id={`zone-${item.id}`}
-                    checked={(formData.zone as string[])?.includes(item.id)}
-                    onCheckedChange={(checked) => handleMultiSelectChange('zone', item.id, !!checked)}
-                  />
-                  <Label htmlFor={`zone-${item.id}`} className="font-normal">{item.label}</Label>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="zone" render={({ field }) => (
+              <FormItem>
+                <Label>Zone (Optional)</Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md">
+                  {zoneOptions.map((item) => (
+                    <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
+                      <Checkbox
+                        checked={field.value?.includes(item.id)}
+                        onCheckedChange={(checked) => {
+                          return checked
+                            ? field.onChange([...(field.value || []), item.id])
+                            : field.onChange(field.value?.filter((value) => value !== item.id));
+                        }}
+                      />
+                      <Label className="font-normal">{item.label}</Label>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Partner Tags</Label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md">
-              {partnerTagOptions.map((item) => (
-                <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
-                  <Checkbox
-                    id={`partner_tag-${item.id}`}
-                    checked={(formData.partner_tag as string[])?.includes(item.id)}
-                    onCheckedChange={(checked) => handleMultiSelectChange('partner_tag', item.id, !!checked)}
-                  />
-                  <Label htmlFor={`partner_tag-${item.id}`} className="font-normal">{item.label}</Label>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="partner_tag" render={({ field }) => (
+              <FormItem>
+                <Label>Partner Tags</Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md">
+                  {partnerTagOptions.map((item) => (
+                    <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
+                      <Checkbox
+                        checked={field.value?.includes(item.id)}
+                        onCheckedChange={(checked) => {
+                          return checked
+                            ? field.onChange([...(field.value || []), item.id])
+                            : field.onChange(field.value?.filter((value) => value !== item.id));
+                        }}
+                      />
+                      <Label className="font-normal">{item.label}</Label>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Assigned Employees</Label>
-            <ScrollArea className="h-40 w-full rounded-md border p-4">
-              <div className="space-y-2">
-                {userOptions.map(option => (
-                  <div key={option.value} className="flex flex-row items-start space-x-3 space-y-0">
-                    <Checkbox
-                      id={`user-${option.value}`}
-                      checked={(formData.assignedUserIds || []).includes(option.value)}
-                      onCheckedChange={(checked) => handleAssignedUserChange(option.value, !!checked)}
-                    />
-                    <Label htmlFor={`user-${option.value}`} className="font-normal">{option.label}</Label>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <div className="space-y-2">
+              <Label>Additional Contacts</Label>
+              <div className="space-y-4">
+                {fields.map((field, index) => (
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-5 gap-4 border p-4 rounded-md relative">
+                    <FormField control={form.control} name={`contacts.${index}.contactName`} render={({ field }) => (
+                      <FormItem><Label>Contact Name</Label><FormControl><Input placeholder="John Doe" {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name={`contacts.${index}.contactDesignation`} render={({ field }) => (
+                      <FormItem><Label>Designation</Label><FormControl><Input placeholder="Sales Manager" {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name={`contacts.${index}.contactNumber`} render={({ field }) => (
+                      <FormItem><Label>Contact Number</Label><FormControl><Input type="tel" placeholder="+91-9876543210" {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name={`contacts.${index}.contactEmail`} render={({ field }) => (
+                      <FormItem><Label>Contact Email</Label><FormControl><Input type="email" placeholder="contact@example.com" {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <div className="md:col-span-1 flex items-end justify-start md:justify-end">
+                      <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
+                <Button type="button" variant="outline" onClick={() => append({ contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '' })}>
+                  <Plus className="mr-2 h-4 w-4" /> Add More Contact
+                </Button>
               </div>
-            </ScrollArea>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="productTypes">Product Types (comma-separated)</Label>
-            <Textarea id="productTypes" value={(formData.productTypes || []).join(', ')} onChange={(e) => handleInputChange('productTypes', e.target.value.split(',').map(s => s.trim()))} />
-          </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button type="submit" onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : 'Save Changes'}
-          </Button>
-        </DialogFooter>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Interactions</Label>
+              <div className="space-y-4">
+                {interactionFields.map((field, index) => (
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 border p-4 rounded-md relative">
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.isrId`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>ISR</FormLabel>
+                          <Select onValueChange={interactionField.onChange} defaultValue={interactionField.value}>
+                            <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Select ISR" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {users.filter(u => ['fsr', 'bde', 'team-leader'].includes(u.role)).map(user => (
+                                <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.contactPerson`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>Contact Person</FormLabel>
+                          <FormControl><Input placeholder="Jane Smith" {...interactionField} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.status`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>Status</FormLabel>
+                          <Select onValueChange={interactionField.onChange} defaultValue={interactionField.value}>
+                            <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {interactionStatusOptions.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.designation`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>Designation</FormLabel>
+                          <FormControl><Input placeholder="Manager" {...interactionField} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.contactNumber`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>Contact Number</FormLabel>
+                          <FormControl><Input type="tel" placeholder="+91..." {...interactionField} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.contactEmail`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>Contact Email</FormLabel>
+                          <FormControl><Input type="email" placeholder="person@example.com" {...interactionField} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="flex items-end justify-start">
+                      <Button type="button" variant="destructive" size="icon" onClick={() => removeInteraction(index)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" onClick={() => appendInteraction({ 
+                  isrId: '', 
+                  contactPerson: '', 
+                  status: 'freshfollowup-connected',
+                  designation: '',
+                  contactNumber: '',
+                  contactEmail: '',
+                })}>
+                  <Plus className="mr-2 h-4 w-4" /> Add Interaction
+                </Button>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

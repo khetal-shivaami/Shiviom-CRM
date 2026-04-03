@@ -14,7 +14,8 @@ import UserAssignmentSelect from './UserAssignmentSelect';
 import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/config/api';
 import { Checkbox } from './ui/checkbox';
-import { ArrowLeft } from 'lucide-react';
+import { useFieldArray } from 'react-hook-form';
+import { ArrowLeft, Plus, X } from 'lucide-react';
 
 const identityOptions = [
   { id: 'web-app-developer', label: 'Web App Developer' },
@@ -95,6 +96,23 @@ const partnerSchema = z.object({
   partner_status: z.enum(['activate_portal', 'on_hold'], {
     required_error: "Partner status is required.",
   }),
+  contacts: z.array(z.object({
+    contactName: z.string().min(1, 'Contact name is required.'),
+    contactDesignation: z.string().optional().or(z.literal('')),
+    contactNumber: z.string().optional().or(z.literal('')),
+    contactEmail: z.string().email('Invalid email address.').optional().or(z.literal('')),
+  })).optional(),
+  interactions: z.array(z.object({
+    isrId: z.string().min(1, 'ISR is required.'),
+    contactPerson: z.string().min(1, 'Contact person is required.'),
+    designation: z.string().optional().or(z.literal('')),
+    contactNumber: z.string().optional().or(z.literal('')),
+    contactEmail: z.string().email('Invalid email address.').optional().or(z.literal('')),
+    status: z.enum(['freshfollowup-connected', 'followup-not-connected', 'presentation', 'feedback'], {
+      required_error: "Status is required.",
+    }),
+  })).optional(),
+
 });
 
 type PartnerFormData = z.infer<typeof partnerSchema>;
@@ -104,6 +122,13 @@ interface AddPartnerFormProps {
   onSuccess: () => void;
   onCancel: () => void;
 }
+
+const interactionStatusOptions = [
+  { value: 'freshfollowup-connected', label: 'Fresh Follow-up - Connected' },
+  { value: 'followup-not-connected', label: 'Follow-up - Not Connected' },
+  { value: 'presentation', label: 'Presentation' },
+  { value: 'feedback', label: 'Feedback' },
+] as const;
 
 const countries = [
   { name: 'India', code: 'IN', dial_code: '+91', flag: '🇮🇳' },
@@ -142,6 +167,8 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
       source_of_partner: 'webinar',
       designation: '',
       partner_status: undefined,
+      contacts: [],
+      interactions: [],
     },
   });
 
@@ -191,6 +218,8 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
         source_of_partner: data.source_of_partner,
         designation: data.designation,
         partner_status: data.partner_status,
+        contacts: data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : undefined,
+        interactions: data.interactions && data.interactions.length > 0 ? JSON.stringify(data.interactions) : undefined,
       };
 
       const { error } = await supabase.from('partners').insert([newPartnerData]);
@@ -207,6 +236,8 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
       await logCrmAction("Add Partner", logDetails);
       form.reset();
       setAssignedUserIds([]);
+      contactsFieldArray.replace([]); // Reset contacts field array too
+      interactionsFieldArray.replace([]); // Reset interactions field array
       onSuccess();
     } catch (error) {
       console.error('Error adding partner:', error);
@@ -218,6 +249,32 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const contactsFieldArray = useFieldArray({
+    control: form.control,
+    name: 'contacts',
+  });
+
+  const interactionsFieldArray = useFieldArray({
+    control: form.control,
+    name: 'interactions',
+  });
+
+  // Default empty contact object for appending
+  const defaultContactValue = {
+    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: ''
+
+  };
+
+  // Default empty interaction object for appending
+  const defaultInteractionValue = {
+    isrId: '',
+    contactPerson: '',
+    designation: '',
+    contactNumber: '',
+    contactEmail: '',
+    status: 'freshfollowup-connected' as const,
   };
 
   return (
@@ -614,6 +671,184 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                 allowedRoles={['fsr', 'team-leader', 'bde']}
               />
             </div>
+            
+            {/* Additional Contacts Section */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg">Additional Contacts</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {contactsFieldArray.fields.map((field, index) => (
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-5 gap-4 border p-4 rounded-md relative">
+                    <FormField
+                      control={form.control}
+                      name={`contacts.${index}.contactName`}
+                      render={({ field: contactField }) => (
+                        <FormItem>
+                          <FormLabel>Contact Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="John Doe" {...contactField} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`contacts.${index}.contactDesignation`}
+                      render={({ field: contactField }) => (
+                        <FormItem>
+                          <FormLabel>Designation</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Sales Manager" {...contactField} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`contacts.${index}.contactNumber`}
+                      render={({ field: contactField }) => (
+                        <FormItem>
+                          <FormLabel>Contact Number</FormLabel>
+                          <FormControl>
+                            <Input type="tel" placeholder="+91-9876543210" {...contactField} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`contacts.${index}.contactEmail`}
+                      render={({ field: contactField }) => (
+                        <FormItem>
+                          <FormLabel>Contact Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" placeholder="contact@example.com" {...contactField} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="md:col-span-1 flex items-end justify-start md:justify-end">
+                      <Button type="button" variant="destructive" size="icon" onClick={() => contactsFieldArray.remove(index)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" onClick={() => contactsFieldArray.append(defaultContactValue)}>
+                  <Plus className="mr-2 h-4 w-4" /> Add More Contact
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Interactions Section */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg">Add Interactions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {interactionsFieldArray.fields.map((field, index) => (
+                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 border p-4 rounded-md relative">
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.isrId`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>ISR</FormLabel>
+                          <Select onValueChange={interactionField.onChange} defaultValue={interactionField.value}>
+                            <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Select ISR" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {users.filter(u => ['fsr', 'bde', 'team-leader'].includes(u.role)).map(user => (
+                                <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.contactPerson`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>Contact Person</FormLabel>
+                          <FormControl><Input placeholder="Jane Smith" {...interactionField} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.status`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>Status</FormLabel>
+                          <Select onValueChange={interactionField.onChange} defaultValue={interactionField.value}>
+                            <FormControl>
+                              <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {interactionStatusOptions.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.designation`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>Designation</FormLabel>
+                          <FormControl><Input placeholder="Manager" {...interactionField} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.contactNumber`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>Contact Number</FormLabel>
+                          <FormControl><Input type="tel" placeholder="+91..." {...interactionField} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`interactions.${index}.contactEmail`}
+                      render={({ field: interactionField }) => (
+                        <FormItem>
+                          <FormLabel>Contact Email</FormLabel>
+                          <FormControl><Input type="email" placeholder="person@example.com" {...interactionField} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="flex items-end justify-start">
+                      <Button type="button" variant="destructive" size="icon" onClick={() => interactionsFieldArray.remove(index)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" onClick={() => interactionsFieldArray.append(defaultInteractionValue)}>
+                  <Plus className="mr-2 h-4 w-4" /> Add Interaction
+                </Button>
+              </CardContent>
+            </Card>
 
             <div className="flex justify-end space-x-2 pt-4">
               <Button type="button" variant="outline" onClick={onCancel}>
