@@ -20,6 +20,7 @@ export interface Customer {
 }
 
 export interface Partner {
+  feedback: any;
   contacts(contacts: string): unknown;
   contacts: any;
   designation: string;

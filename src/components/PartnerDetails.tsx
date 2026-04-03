@@ -360,6 +360,13 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
     source_of_partner: partner.source_of_partner,
     contacts: partner.contacts, // Ensure contacts are passed through
     interactions: partner.interactions, // Ensure interactions are passed through
+    feedback: (() => {
+      if (typeof partner.feedback === 'string') {
+        try { return JSON.parse(partner.feedback); } catch (e) { return []; }
+      }
+      // Ensure it's always an array
+      return Array.isArray(partner.feedback) ? partner.feedback : [];
+    })(),
   };
 
   const [isLoadingQuotations, setIsLoadingQuotations] = useState(true);

@@ -21,11 +21,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/config/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from 'zod';
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useFieldArray } from 'react-hook-form';
-import { Plus, X } from 'lucide-react';
+import { Badge, Plus, X } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 
 interface EditPartnerDialogProps {
   partner: Partner;
@@ -100,6 +101,19 @@ const interactionStatusOptions = [
   { value: 'feedback', label: 'Feedback' },
 ] as const;
 
+const feedbackStatusOptions = [
+  { value: 'call-back', label: 'Call Back' },
+  { value: 'email', label: 'Email' },
+  { value: 'followup', label: 'Followup' },
+  { value: 'interested', label: 'Interested' },
+  { value: 'nc', label: 'NC' },
+  { value: 'not-interested', label: 'Not Interested' },
+  { value: 'price-challenge', label: 'Price challenge' },
+  { value: 'whatsapp', label: 'Whatsapp' },
+  { value: 'linkedin', label: 'Linkedin' },
+  { value: 'presentation-call', label: 'Presentation Call' },
+] as const;
+
 
 const parseJsonSafe = (value: any): string[] => {
   if (Array.isArray(value)) return value;
@@ -148,6 +162,8 @@ const partnerSchema = z.object({
       required_error: "Status is required.",
     }),
   })).optional(),
+  feedback_status: z.string().optional(),
+  feedback_notes: z.string().optional(),
 });
 
 type PartnerFormData = z.infer<typeof partnerSchema>;
@@ -157,10 +173,20 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState<Partial<Partner>>({});
+  const [feedbackHistory, setFeedbackHistory] = useState<any[]>([]);
 
   const form = useForm<PartnerFormData>({
     resolver: zodResolver(partnerSchema),
-    defaultValues: {},
+    // We will set default values in the useEffect hook when partner data is available.
+    defaultValues: {
+      name: '',
+      email: '',
+      company: '',
+      contacts: [],
+      interactions: [],
+      feedback_status: '',
+      feedback_notes: '',
+    },
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -190,7 +216,24 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
             } catch (e) { return []; }
           })()
         : (Array.isArray(partner.interactions) ? partner.interactions : []);
+      
+      const feedbackData = typeof partner.feedback === 'string'
+        ? (() => {
+            try {
+              const parsed = JSON.parse(partner.feedback);
+              // Ensure it's an array
+              return Array.isArray(parsed) ? parsed : [];
+            } catch (e) { return []; }
+          })()
+        : (Array.isArray(partner.feedback) ? partner.feedback : []);
+      
+      // To ensure the history view updates correctly, we'll set it in the state.
+      // We also reverse it here for display purposes so the latest is at the top.
+      setFeedbackHistory([...feedbackData].reverse());
 
+      // The form fields should be for adding NEW feedback, so we'll clear them.
+      const latestFeedback = feedbackData.length > 0 ? feedbackData[feedbackData.length - 1] : null;
+      
       form.reset({
         name: partner.name,
         email: partner.email,
@@ -210,6 +253,9 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
         designation: partner.designation || '',
         contacts: contacts,
         interactions: interactions,
+        // Clear the fields for adding new feedback. The history is shown below.
+        feedback_status: '',
+        feedback_notes: '',
       });
     }
   }, [partner, form]);
@@ -253,6 +299,25 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
   const onSubmit = async (data: PartnerFormData) => {
     setIsSubmitting(true);
     try {
+      // Get existing feedback history
+      const existingFeedback = typeof partner.feedback === 'string'
+        ? (JSON.parse(partner.feedback) || [])
+        : (Array.isArray(partner.feedback) ? partner.feedback : []);
+
+      let updatedFeedbackHistory = [...existingFeedback];
+
+      // If new feedback is provided, add it to the history
+      if (data.feedback_status) {
+        const newFeedbackEntry = {
+            status: data.feedback_status,
+            notes: data.feedback_notes || '',
+            timestamp: new Date().toISOString(),
+        };
+        updatedFeedbackHistory.push(newFeedbackEntry);
+      }
+
+      const feedbackToSave = updatedFeedbackHistory.length > 0 ? JSON.stringify(updatedFeedbackHistory) : null;
+
       const { error } = await supabase
         .from('partners')
         .update({
@@ -274,6 +339,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
           designation: data.designation,
           contacts: data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : null,
           interactions: data.interactions && data.interactions.length > 0 ? JSON.stringify(data.interactions) : null,
+          feedback: feedbackToSave,
         })
         .eq('id', partner.id);
 
@@ -553,6 +619,56 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                 </Button>
               </div>
             </div>
+            
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg">Feedback</CardTitle>
+              </CardHeader>
+              <CardContent>
+                
+                {feedbackHistory.length > 0 && (
+                  <div className="mb-4 p-3 bg-muted/50 rounded-lg text-sm">
+                    <p className="font-medium">
+                      Latest Feedback: <Badge variant="secondary">{feedbackHistory[0].status}</Badge>
+                      <span className="text-muted-foreground mx-2">on</span>
+                      {new Date(feedbackHistory[0].timestamp).toLocaleString()}
+                    </p>
+                    <p className="text-muted-foreground mt-1 pl-1 border-l-2 ml-1">"{feedbackHistory[0].notes || 'No notes provided.'}"</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField control={form.control} name="feedback_status" render={({ field }) => (
+                    <FormItem>
+                      <Label>Feedback Status</Label>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select feedback status" /></SelectTrigger></FormControl>
+                        <SelectContent>{feedbackStatusOptions.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="feedback_notes" render={({ field }) => (<FormItem className="md:col-span-2"><Label>Feedback Notes</Label><FormControl><Textarea placeholder="Enter feedback notes" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                </div>
+                {feedbackHistory.length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="text-sm font-medium mb-2">Previous Feedback</h4>
+                    <ScrollArea className="h-40 w-full rounded-md border p-4">
+                      <div className="space-y-4">
+                        {feedbackHistory.map((entry, index) => (
+                          <div key={index} className="p-3 bg-muted/50 rounded-lg text-sm space-y-2">
+                            <div className="flex justify-between items-start">
+                              <Badge variant="secondary">{entry.status}</Badge>
+                              <span className="text-xs text-muted-foreground">{new Date(entry.timestamp).toLocaleString()}</span>
+                            </div>
+                            <p className="text-muted-foreground whitespace-pre-wrap">{entry.notes || 'No notes provided.'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>

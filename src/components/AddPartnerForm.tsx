@@ -77,6 +77,19 @@ const sourceOfPartnerOptions = [
   { value: 'management', label: 'Management' },
 ] as const;
 
+const feedbackStatusOptions = [
+  { value: 'call-back', label: 'Call Back' },
+  { value: 'email', label: 'Email' },
+  { value: 'followup', label: 'Followup' },
+  { value: 'interested', label: 'Interested' },
+  { value: 'nc', label: 'NC' },
+  { value: 'not-interested', label: 'Not Interested' },
+  { value: 'price-challenge', label: 'Price challenge' },
+  { value: 'whatsapp', label: 'Whatsapp' },
+  { value: 'linkedin', label: 'Linkedin' },
+  { value: 'presentation-call', label: 'Presentation Call' },
+] as const;
+
 const partnerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email'),
@@ -96,6 +109,8 @@ const partnerSchema = z.object({
   partner_status: z.enum(['activate_portal', 'on_hold'], {
     required_error: "Partner status is required.",
   }),
+  feedback_status: z.string().optional(),
+  feedback_notes: z.string().optional(),
   contacts: z.array(z.object({
     contactName: z.string().min(1, 'Contact name is required.'),
     contactDesignation: z.string().optional().or(z.literal('')),
@@ -167,6 +182,8 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
       source_of_partner: 'webinar',
       designation: '',
       partner_status: undefined,
+      feedback_status: undefined,
+      feedback_notes: '',
       contacts: [],
       interactions: [],
     },
@@ -201,6 +218,15 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
   const onSubmit = async (data: PartnerFormData) => {
     setIsSubmitting(true);
     try {
+      // Prepare feedback object
+      const feedbackObject = data.feedback_status
+        ? {
+            status: data.feedback_status,
+            notes: data.feedback_notes || '',
+            timestamp: new Date().toISOString(),
+          }
+        : null;
+
       // The database schema uses snake_case for column names.
       const newPartnerData = {
         name: data.name,
@@ -218,6 +244,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
         source_of_partner: data.source_of_partner,
         designation: data.designation,
         partner_status: data.partner_status,
+        feedback: feedbackObject ? JSON.stringify(feedbackObject) : undefined,
         contacts: data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : undefined,
         interactions: data.interactions && data.interactions.length > 0 ? JSON.stringify(data.interactions) : undefined,
       };
@@ -276,6 +303,8 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
     contactEmail: '',
     status: 'freshfollowup-connected' as const,
   };
+
+  const watchedFeedbackStatus = form.watch('feedback_status');
 
   return (
     <Card className="w-full max-w-7xl mx-auto">
@@ -429,7 +458,34 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                   <FormMessage />
                 </FormItem>
               )}
-            />
+            />            
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="feedback_status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Feedback</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Select feedback status" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {feedbackStatusOptions.map(option => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {watchedFeedbackStatus && (
+                <FormField control={form.control} name="feedback_notes" render={({ field }) => (
+                  <FormItem className="md:col-span-2"><FormLabel>Feedback Notes</FormLabel><FormControl><Input placeholder="Enter feedback notes" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              )}
             </div>
             
             <FormField
