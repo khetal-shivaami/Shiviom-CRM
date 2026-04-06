@@ -450,13 +450,10 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
         source_of_partner: data.source_of_partner,
         designation: data.designation,
         partner_status: data.partner_status,
-<<<<<<< HEAD
         feedback: feedbackArray ? JSON.stringify(feedbackArray) : undefined,
-=======
         city: data.city || null,
         vertical: data.vertical || null,
         feedback: feedbackObject ? JSON.stringify(feedbackObject) : undefined,
->>>>>>> 2222e5c7ab7d0c6e599b4022f410fc218a8419b8
         contacts: data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : undefined,
         interactions: data.interactions && data.interactions.length > 0 ? JSON.stringify(data.interactions) : undefined,
       };

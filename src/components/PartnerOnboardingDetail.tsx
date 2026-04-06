@@ -465,6 +465,13 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
     return Array.isArray(partner.contacts) ? partner.contacts : [];
   }, [partner.contacts]);
 
+  const interactions = useMemo(() => {
+    if (typeof partner.interactions === 'string') {
+      try { return JSON.parse(partner.interactions); } catch (e) { return []; }
+    }
+    return Array.isArray(partner.interactions) ? partner.interactions : [];
+  }, [partner.interactions]);
+
 
   useEffect(() => {
     console.log("Partner details:", partner);
@@ -1206,6 +1213,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                       <TableRow>
                         <TableHead className="text-xs">Name</TableHead>
                         <TableHead className="text-xs">Email</TableHead>
+                        <TableHead className="text-xs">Designation</TableHead>
                         <TableHead className="text-xs">Phone</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1216,7 +1224,37 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                           <TableCell className="py-2 text-xs">
                             {contact.contactEmail ? <a href={`mailto:${contact.contactEmail}`} className="hover:underline">{contact.contactEmail}</a> : 'N/A'}
                           </TableCell>
+                          <TableCell className="py-2 text-xs">{contact.contactDesignation || 'N/A'}</TableCell>
                           <TableCell className="py-2 text-xs">{contact.contactNumber || 'N/A'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              {interactions.length > 0 && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-2">Interactions</h4>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">ISR</TableHead>
+                        <TableHead className="text-xs">Contact Person</TableHead>
+                        <TableHead className="text-xs">Status</TableHead>
+                        <TableHead className="text-xs">Email</TableHead>
+                        <TableHead className="text-xs">Phone</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {interactions.map((interaction: any, index: number) => (
+                        <TableRow key={index}>
+                          <TableCell className="py-2 text-xs font-medium">{getUserName(interaction.isrId)}</TableCell>
+                          <TableCell className="py-2 text-xs">{interaction.contactPerson}</TableCell>
+                          <TableCell className="py-2 text-xs">{interaction.status}</TableCell>
+                          <TableCell className="py-2 text-xs">
+                            {interaction.contactEmail ? <a href={`mailto:${interaction.contactEmail}`} className="hover:underline">{interaction.contactEmail}</a> : 'N/A'}
+                          </TableCell>
+                          <TableCell className="py-2 text-xs">{interaction.contactNumber || 'N/A'}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

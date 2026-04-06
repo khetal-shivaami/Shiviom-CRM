@@ -317,6 +317,8 @@ const PartnerTable = ({ customers, products, users }: PartnerTableProps) => {
         renewal_manager_name: p.renewal_manager_name,
         renewal_manager_id: p.renewal_manager_id,
         designation: p.designation,
+        interactions: parseJsonArray(p.interactions),
+        contacts: parseJsonArray(p.contacts),
       }));
       
       setPartners(mappedPartners);
