@@ -284,6 +284,16 @@ const AddLicense: React.FC = () => {
         description: `Request to add ${licensesToAdd} license(s) for ${selectedSubscription.domainName} has been submitted successfully.`,
       });
       setIsAddLicenseModalOpen(false);
+
+      // Reload the subscriptions list after a successful license addition
+      if (selectedPartnerId) {
+        const partner = partners.find(p => p.id === selectedPartnerId);
+        if (partner?.email) {
+          fetchSubscriptions({ partnerEmail: partner.email });
+        }
+      } else if (domainSearch.trim()) {
+        fetchSubscriptions({ domainName: domainSearch.trim() });
+      }
     } catch (error: any) {
       toast({
         title: "Error Adding License",
