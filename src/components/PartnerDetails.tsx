@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, } from '@/components/ui/badge';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, CheckCircle, XCircle, User, Calendar, CreditCard, Package, Building, View, Mail, Phone, MapPin, Star, Users, Search, X, ChevronsRight, Briefcase, Percent, History, StickyNote, ChevronDown, Handshake, FileText as FileTextIcon, Edit, MessageSquare, Loader2, Activity, AlertTriangle, Send, ExternalLink, Eye, Upload, Shield, PlusCircle, Link, Plus, Share } from 'lucide-react';
 import { Partner, Customer, Product, User as UserType, PartnerComment, PartnerNote, AccountManager } from '../types';
@@ -337,6 +337,8 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
   const [drCasesOpen, setDrCasesOpen] = useState(false);
   const [partnerState, setPartnerState] = useState<Partner>(partner);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [interactionsOpen, setInteractionsOpen] = useState(false);
+  const [additionalContactsOpen, setAdditionalContactsOpen] = useState(false);
 
   const parseJsonSafe = (value: any): string[] => {
     if (!value) return [];
@@ -368,7 +370,28 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
       return Array.isArray(partner.feedback) ? partner.feedback : [];
     })(),
   };
+console.log("Initial Partner State:", partner);
+const interactions = useMemo(() => {
+  if (typeof partner.interactions === 'string') {
+    try { return JSON.parse(partner.interactions); } catch (e) { return []; }
+  }
+  return Array.isArray(partner.interactions) ? partner.interactions : [];
+}, [partner.interactions]);
 
+  const additionalContacts = useMemo(() => {
+    if (!partner.contacts) {
+      return [];
+    }
+    if (typeof partner.contacts === 'string') {
+      try {
+        const parsed = JSON.parse(partner.contacts);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+    return Array.isArray(partner.contacts) ? partner.contacts : [];
+  }, [partner.contacts]);
   const [isLoadingQuotations, setIsLoadingQuotations] = useState(true);
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
   const [isQuotationSplitView, setIsQuotationSplitView] = useState(false);
@@ -380,7 +403,6 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
   const [isRejectQuotationDialogOpen, setIsRejectQuotationDialogOpen] = useState(false);
   const [quotationRejectionReason, setQuotationRejectionReason] = useState('');
   const [selectedQuotationForAction, setSelectedQuotationForAction] = useState<Quotation | null>(null);
-  const [additionalContactsOpen, setAdditionalContactsOpen] = useState(false);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
 
@@ -3351,6 +3373,99 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
           </CardContent>
         </Card>
       </div>
+
+      {/* Interactions */}
+      <Collapsible open={interactionsOpen} onOpenChange={setInteractionsOpen} className="w-full">
+        {interactions.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between cursor-pointer" onClick={() => setInteractionsOpen(!interactionsOpen)}>
+              <CardTitle>Interactions</CardTitle>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-9 p-0">
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", interactionsOpen && "rotate-180")} />
+                  <span className="sr-only">Toggle</span>
+                </Button>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ISR</TableHead>
+                      <TableHead>Contact Person</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Designation</TableHead>
+                      <TableHead>Number</TableHead>
+                      <TableHead>Email</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {interactions.map((interaction: any, index: number) => (
+                      <TableRow key={index}>
+                        <TableCell>{users.find(u => u.id === interaction.isrId)?.name || 'N/A'}</TableCell>
+                        <TableCell>{interaction.contactPerson}</TableCell>
+                        <TableCell>{interaction.status}</TableCell>
+                        <TableCell>{interaction.designation || 'N/A'}</TableCell>
+                        <TableCell>{interaction.contactNumber || 'N/A'}</TableCell>
+                        <TableCell>
+                          {interaction.contactEmail ? <a href={`mailto:${interaction.contactEmail}`} className="hover:underline">{interaction.contactEmail}</a> : 'N/A'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        )}
+      </Collapsible>
+
+      {/* Additional Contacts */}
+      <Collapsible open={additionalContactsOpen} onOpenChange={setAdditionalContactsOpen} className="w-full">
+        {additionalContacts.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between cursor-pointer" onClick={() => setAdditionalContactsOpen(!additionalContactsOpen)}>
+              <CardTitle>Additional Contacts</CardTitle>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-9 p-0">
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", additionalContactsOpen && "rotate-180")} />
+                  <span className="sr-only">Toggle</span>
+                </Button>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent>
+                <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Designation</TableHead>
+                  <TableHead>Number</TableHead>
+                  <TableHead>Email</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {additionalContacts.map((contact: any, index: number) => (
+                  <TableRow key={index}>
+                    <TableCell>{contact.contactName}</TableCell>
+                    <TableCell>{contact.contactDesignation || 'N/A'}</TableCell>
+                    <TableCell>{contact.contactNumber || 'N/A'}</TableCell>
+                    <TableCell>
+                      {contact.contactEmail ? (
+                        <a href={`mailto:${contact.contactEmail}`} className="hover:underline">{contact.contactEmail}</a>
+                      ) : 'N/A'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+                </Table>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        )}
+      </Collapsible>
+
       {/* KYC & Documents */}
       <Collapsible
         open={kycDocsOpen}
@@ -3756,50 +3871,6 @@ const PartnerDetails = ({ partner, products, users, onBack, isDialogView = false
         </Card>
       </Collapsible>
 
-      {/* Additional Contacts */}
-      <Collapsible
-        open={additionalContactsOpen}
-        onOpenChange={setAdditionalContactsOpen}
-        className="w-full"
-      >
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between cursor-pointer" onClick={() => setAdditionalContactsOpen(!additionalContactsOpen)}>
-            <CardTitle>Additional Contacts ({additionalContacts.length})</CardTitle>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm" className="w-9 p-0">
-                <ChevronDown className={cn("h-4 w-4 transition-transform", additionalContactsOpen && "rotate-180")} />
-                <span className="sr-only">Toggle</span>
-              </Button>
-            </CollapsibleTrigger>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent>
-              {additionalContacts.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Designation</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Contact Number</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {additionalContacts.map((contact: any, index: number) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{contact.contactName}</TableCell>
-                        <TableCell>{contact.contactDesignation || 'N/A'}</TableCell>
-                        <TableCell>{contact.contactEmail ? <a href={`mailto:${contact.contactEmail}`} className={cn(buttonVariants({ variant: "link" }), "p-0")}>{contact.contactEmail}</a> : 'N/A'}</TableCell>
-                        <TableCell>{contact.contactNumber || 'N/A'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : <p className="text-sm text-muted-foreground">No additional contacts available.</p>}
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
       {/* Comments, Discount History, and Notes */}
       <Collapsible
         open={auxiliaryDataOpen}
