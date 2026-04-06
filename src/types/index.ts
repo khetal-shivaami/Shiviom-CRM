@@ -20,6 +20,13 @@ export interface Customer {
 }
 
 export interface Partner {
+  feedback: any;
+  contacts(contacts: string): unknown;
+  contacts: any;
+  designation: string;
+  source_of_partner: string;
+  partner_type: string;
+  partner_tag(partner_tag: any): unknown;
   partner_status: ReactNode;
   renewal_manager_id: string;
   renewal_manager_name: string;
@@ -49,6 +56,7 @@ export interface Partner {
   stage_owner?: string | null;
   partner_program?: string;
   margin?: string;
+  interactions?: Interaction[];
 }
 
 export type OnboardingStage = 'outreach' | 'product-overview' | 'partner-program' | 'portal-activation' | 'agreement'|  'kyc'  | 'onboarded';
