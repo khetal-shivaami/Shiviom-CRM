@@ -25,8 +25,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useFieldArray } from 'react-hook-form';
-import { Badge, Plus, X } from 'lucide-react';
+import { Badge, Plus, X, Edit } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 
 interface EditPartnerDialogProps {
   partner: Partner;
@@ -36,6 +42,8 @@ interface EditPartnerDialogProps {
   onSuccess: () => void;
   onLogAction?: (actiontype: string, details: string) => Promise<void>;
 }
+
+
 const identityOptions = [
   { id: 'web-app-developer', label: 'Web App Developer' },
   { id: 'system-integrator', label: 'System Integrator' },
@@ -175,6 +183,69 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
   const [formData, setFormData] = useState<Partial<Partner>>({});
   const [feedbackHistory, setFeedbackHistory] = useState<any[]>([]);
 
+  const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null);
+  const [contactData, setContactData] = useState({
+    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '',
+  });
+  const [isInteractionFormOpen, setIsInteractionFormOpen] = useState(false);
+  const [isContactFormOpen, setIsContactFormOpen] = useState(false);
+  const [editingInteractionIndex, setEditingInteractionIndex] = useState<number | null>(null);
+  const [interactionData, setInteractionData] = useState({
+    isrId: '', contactPerson: '', status: 'freshfollowup-connected' as const, designation: '', contactNumber: '', contactEmail: '',
+  });
+
+  const defaultContactValue = {
+    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: ''
+  };
+
+  const handleAddOrUpdateContact = () => {
+    if (!contactData.contactName) {
+      toast({ title: 'Error', description: 'Contact name is required.', variant: 'destructive' });
+      return;
+    }
+    if (contactData.contactEmail && !z.string().email().safeParse(contactData.contactEmail).success) {
+      toast({ title: 'Invalid contact email.', variant: 'destructive' });
+      return;
+    }
+
+    if (editingContactIndex !== null) {
+      update(editingContactIndex, contactData);
+      setEditingContactIndex(null);
+    } else {
+      append(contactData);
+    }
+    setContactData(defaultContactValue);
+    setIsContactFormOpen(false);
+  };
+
+  const defaultInteractionValue = {
+    isrId: '',
+    contactPerson: '',
+    designation: '',
+    contactNumber: '',
+    contactEmail: '',
+    status: 'freshfollowup-connected' as const,
+  };
+
+  const handleAddOrUpdateInteraction = () => {
+    if (!interactionData.isrId || !interactionData.contactPerson) {
+      toast({ title: 'Error', description: 'ISR and Contact Person are required.', variant: 'destructive' });
+      return;
+    }
+    if (interactionData.contactEmail && !z.string().email().safeParse(interactionData.contactEmail).success) {
+      toast({ title: 'Invalid interaction email.', variant: 'destructive' });
+      return;
+    }
+
+    if (editingInteractionIndex !== null) {
+      interactionFieldArray.update(editingInteractionIndex, interactionData);
+      setEditingInteractionIndex(null);
+    } else {
+      interactionFieldArray.append(interactionData);
+    }
+    setInteractionData(defaultInteractionValue);
+    setIsInteractionFormOpen(false);
+  };
   const form = useForm<PartnerFormData>({
     resolver: zodResolver(partnerSchema),
     // We will set default values in the useEffect hook when partner data is available.
@@ -189,15 +260,32 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, update } = useFieldArray({
     control: form.control,
     name: "contacts",
   });
 
-  const { fields: interactionFields, append: appendInteraction, remove: removeInteraction } = useFieldArray({
+  const interactionFieldArray = useFieldArray({
     control: form.control,
     name: "interactions",
   });
+  const handleEditContact = (index: number) => {
+    const contacts = form.getValues().contacts;
+    if (contacts && contacts[index]) {
+        setContactData(contacts[index]);
+        setEditingContactIndex(index);
+        setIsContactFormOpen(true);
+    }
+  };
+
+  const handleEditInteraction = (index: number) => {
+    const interactions = form.getValues().interactions;
+    if (interactions && interactions[index]) {
+      setInteractionData(interactions[index]);
+      setIsInteractionFormOpen(true);
+      setEditingInteractionIndex(index);
+    }
+  };
 
   useEffect(() => {
     if (partner) {
@@ -211,8 +299,9 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
       const interactions = typeof partner.interactions === 'string'
         ? (() => {
             try {
-              console.log("Parsing interactions from string:", partner.interactions);
-              return JSON.parse(partner.interactions); // Correctly parse partner.interactions
+              // It's possible partner.interactions is an empty string or not a valid JSON array.
+              const parsed = partner.interactions ? JSON.parse(partner.interactions) : [];
+              return Array.isArray(parsed) ? parsed : [];
             } catch (e) { return []; }
           })()
         : (Array.isArray(partner.interactions) ? partner.interactions : []);
@@ -229,7 +318,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
       
       // To ensure the history view updates correctly, we'll set it in the state.
       // We also reverse it here for display purposes so the latest is at the top.
-      setFeedbackHistory([...feedbackData].reverse());
+      setFeedbackHistory(feedbackData);
 
       // The form fields should be for adding NEW feedback, so we'll clear them.
       const latestFeedback = feedbackData.length > 0 ? feedbackData[feedbackData.length - 1] : null;
@@ -313,7 +402,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
             notes: data.feedback_notes || '',
             timestamp: new Date().toISOString(),
         };
-        updatedFeedbackHistory.push(newFeedbackEntry);
+        updatedFeedbackHistory.unshift(newFeedbackEntry);
       }
 
       const feedbackToSave = updatedFeedbackHistory.length > 0 ? JSON.stringify(updatedFeedbackHistory) : null;
@@ -369,7 +458,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1000px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[1500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Partner: {partner.name}</DialogTitle>
           <DialogDescription>Update the details for this partner.</DialogDescription>
@@ -481,165 +570,203 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
               </FormItem>
             )} />
 
-            <div className="space-y-2">
-              <Label>Additional Contacts</Label>
-              <div className="space-y-4">
-                {fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-5 gap-4 border p-4 rounded-md relative">
-                    <FormField control={form.control} name={`contacts.${index}.contactName`} render={({ field }) => (
-                      <FormItem><Label>Contact Name</Label><FormControl><Input placeholder="John Doe" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name={`contacts.${index}.contactDesignation`} render={({ field }) => (
-                      <FormItem><Label>Designation</Label><FormControl><Input placeholder="Sales Manager" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name={`contacts.${index}.contactNumber`} render={({ field }) => (
-                      <FormItem><Label>Contact Number</Label><FormControl><Input type="tel" placeholder="+91-9876543210" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name={`contacts.${index}.contactEmail`} render={({ field }) => (
-                      <FormItem><Label>Contact Email</Label><FormControl><Input type="email" placeholder="contact@example.com" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <div className="md:col-span-1 flex items-end justify-start md:justify-end">
-                      <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" onClick={() => append({ contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '' })}>
-                  <Plus className="mr-2 h-4 w-4" /> Add More Contact
-                </Button>
-              </div>
-            </div>
+            {/* Additional Contacts Section */}
+            <Card className="mt-6">
+              <CardHeader><CardTitle className="text-lg">Additional Contacts</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                {fields.length > 0 && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Designation</TableHead>
+                        <TableHead>Number</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {fields.map((field, index) => (
+                        <TableRow key={field.id}>
+                          <TableCell>{form.watch(`contacts.${index}.contactName`)}</TableCell>
+                          <TableCell>{form.watch(`contacts.${index}.contactDesignation`)}</TableCell>
+                          <TableCell>{form.watch(`contacts.${index}.contactNumber`)}</TableCell>
+                          <TableCell>{form.watch(`contacts.${index}.contactEmail`)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => handleEditContact(index)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
 
-            <div className="space-y-2">
-              <Label>Interactions</Label>
-              <div className="space-y-4">
-                {interactionFields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 border p-4 rounded-md relative">
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.isrId`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>ISR</FormLabel>
-                          <Select onValueChange={interactionField.onChange} defaultValue={interactionField.value}>
-                            <FormControl>
-                              <SelectTrigger><SelectValue placeholder="Select ISR" /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {users.filter(u => ['fsr', 'bde', 'team-leader'].includes(u.role)).map(user => (
-                                <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.contactPerson`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>Contact Person</FormLabel>
-                          <FormControl><Input placeholder="Jane Smith" {...interactionField} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.status`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>Status</FormLabel>
-                          <Select onValueChange={interactionField.onChange} defaultValue={interactionField.value}>
-                            <FormControl>
-                              <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {interactionStatusOptions.map(opt => (
-                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.designation`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>Designation</FormLabel>
-                          <FormControl><Input placeholder="Manager" {...interactionField} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.contactNumber`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>Contact Number</FormLabel>
-                          <FormControl><Input type="tel" placeholder="+91..." {...interactionField} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.contactEmail`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>Contact Email</FormLabel>
-                          <FormControl><Input type="email" placeholder="person@example.com" {...interactionField} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex items-end justify-start">
-                      <Button type="button" variant="destructive" size="icon" onClick={() => removeInteraction(index)}>
-                        <X className="h-4 w-4" />
-                      </Button>
+                <Collapsible open={isContactFormOpen} onOpenChange={setIsContactFormOpen}>
+                  <CollapsibleTrigger asChild>
+                    <Button type="button" variant="outline" onClick={() => {
+                      if (!isContactFormOpen) {
+                        setEditingContactIndex(null);
+                        setContactData(defaultContactValue);
+                      }
+                      setIsContactFormOpen(!isContactFormOpen);
+                    }}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Contact
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 border p-4 rounded-md">
+                      <div className="space-y-2">
+                        <Label>Contact Name</Label>
+                        <Input placeholder="John Doe" value={contactData.contactName} onChange={e => setContactData(d => ({ ...d, contactName: e.target.value }))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Designation</Label>
+                        <Input placeholder="Sales Manager" value={contactData.contactDesignation} onChange={e => setContactData(d => ({ ...d, contactDesignation: e.target.value }))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Contact Number</Label>
+                        <Input type="tel" placeholder="+91-9876543210" value={contactData.contactNumber} onChange={e => setContactData(d => ({ ...d, contactNumber: e.target.value }))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Contact Email</Label>
+                        <Input type="email" placeholder="contact@example.com" value={contactData.contactEmail} onChange={e => setContactData(d => ({ ...d, contactEmail: e.target.value }))} />
+                      </div>
+                      <div className="flex items-end gap-2">
+                        <Button type="button" onClick={handleAddOrUpdateContact}>{editingContactIndex !== null ? 'Update Contact' : 'Add Contact'}</Button>
+                        {editingContactIndex !== null && (<Button type="button" variant="outline" onClick={() => { setEditingContactIndex(null); setContactData(defaultContactValue); setIsContactFormOpen(false); }}>Cancel</Button>)}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" onClick={() => appendInteraction({ 
-                  isrId: '', 
-                  contactPerson: '', 
-                  status: 'freshfollowup-connected',
-                  designation: '',
-                  contactNumber: '',
-                  contactEmail: '',
-                })}>
-                  <Plus className="mr-2 h-4 w-4" /> Add Interaction
-                </Button>
-              </div>
-            </div>
-            
+                  </CollapsibleContent>
+                </Collapsible>
+              </CardContent>
+            </Card>
+
+            {/* Interactions Section */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg">Interactions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {interactionFieldArray.fields.length > 0 && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ISR</TableHead>
+                        <TableHead>Contact Person</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Designation</TableHead>
+                        <TableHead>Number</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {interactionFieldArray.fields.map((field, index) => (
+                        <TableRow key={field.id}>
+                          <TableCell>{users.find(u => u.id === form.watch(`interactions.${index}.isrId`))?.name || 'N/A'}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.contactPerson`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.status`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.designation`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.contactNumber`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.contactEmail`)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => handleEditInteraction(index)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button type="button" variant="destructive" size="icon" onClick={() => interactionFieldArray.remove(index)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+
+                <Collapsible open={isInteractionFormOpen} onOpenChange={setIsInteractionFormOpen}>
+                  <CollapsibleTrigger asChild>
+                    <Button type="button" variant="outline" onClick={() => {
+                      if (!isInteractionFormOpen) {
+                        setEditingInteractionIndex(null);
+                        setInteractionData(defaultInteractionValue);
+                      }
+                      setIsInteractionFormOpen(!isInteractionFormOpen);
+                    }}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Interaction
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border p-4 rounded-md">
+                      <div className="space-y-2">
+                        <Label>ISR</Label>
+                        <Select value={interactionData.isrId} onValueChange={value => setInteractionData(d => ({ ...d, isrId: value }))}>
+                          <SelectTrigger><SelectValue placeholder="Select ISR" /></SelectTrigger>
+                          <SelectContent>
+                            {users.filter(u => ['fsr', 'bde', 'team-leader'].includes(u.role)).map(user => (
+                              <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Contact Person</Label>
+                        <Input placeholder="Jane Smith" value={interactionData.contactPerson} onChange={e => setInteractionData(d => ({ ...d, contactPerson: e.target.value }))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Status</Label>
+                        <Select value={interactionData.status} onValueChange={value => setInteractionData(d => ({ ...d, status: value as any }))}>
+                          <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                          <SelectContent>
+                            {interactionStatusOptions.map(opt => (
+                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Designation</Label>
+                        <Input placeholder="Manager" value={interactionData.designation} onChange={e => setInteractionData(d => ({ ...d, designation: e.target.value }))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Contact Number</Label>
+                        <Input type="tel" placeholder="+91..." value={interactionData.contactNumber} onChange={e => setInteractionData(d => ({ ...d, contactNumber: e.target.value }))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Contact Email</Label>
+                        <Input type="email" placeholder="person@example.com" value={interactionData.contactEmail} onChange={e => setInteractionData(d => ({ ...d, contactEmail: e.target.value }))} />
+                      </div>
+                      <div className="flex items-end gap-2 col-span-full md:col-span-2 justify-end">
+                        <Button type="button" onClick={handleAddOrUpdateInteraction}>
+                          {editingInteractionIndex !== null ? 'Update Interaction' : 'Add Interaction'}
+                        </Button>
+                        {editingInteractionIndex !== null && (
+                          <Button type="button" variant="outline" onClick={() => { setEditingInteractionIndex(null); setInteractionData(defaultInteractionValue); setIsInteractionFormOpen(false); }}>
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </CardContent>
+            </Card>
+
             <Card className="mt-6">
               <CardHeader>
                 <CardTitle className="text-lg">Feedback</CardTitle>
               </CardHeader>
-              <CardContent>
-                
-                {feedbackHistory.length > 0 && (
-                  <div className="mb-4 p-3 bg-muted/50 rounded-lg text-sm">
-                    <p className="font-medium">
-                      Latest Feedback: <Badge variant="secondary">{feedbackHistory[0].status}</Badge>
-                      <span className="text-muted-foreground mx-2">on</span>
-                      {new Date(feedbackHistory[0].timestamp).toLocaleString()}
-                    </p>
-                    <p className="text-muted-foreground mt-1 pl-1 border-l-2 ml-1">"{feedbackHistory[0].notes || 'No notes provided.'}"</p>
-                  </div>
-                )}
+              <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <FormField control={form.control} name="feedback_status" render={({ field }) => (
                     <FormItem>
-                      <Label>Feedback Status</Label>
+                      <Label>Add New Feedback Status</Label>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Select feedback status" /></SelectTrigger></FormControl>
                         <SelectContent>{feedbackStatusOptions.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent>
@@ -647,17 +774,19 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                       <FormMessage />
                     </FormItem>
                   )} />
-                  <FormField control={form.control} name="feedback_notes" render={({ field }) => (<FormItem className="md:col-span-2"><Label>Feedback Notes</Label><FormControl><Textarea placeholder="Enter feedback notes" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                  <FormField control={form.control} name="feedback_notes" render={({ field }) => (<FormItem className="md:col-span-2"><Label>Add New Feedback Notes</Label><FormControl><Textarea placeholder="Enter feedback notes" {...field} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
                 {feedbackHistory.length > 0 && (
-                  <div className="mt-6">
-                    <h4 className="text-sm font-medium mb-2">Previous Feedback</h4>
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium mb-2">Feedback History</h4>
                     <ScrollArea className="h-40 w-full rounded-md border p-4">
                       <div className="space-y-4">
                         {feedbackHistory.map((entry, index) => (
-                          <div key={index} className="p-3 bg-muted/50 rounded-lg text-sm space-y-2">
+                          <div key={index} className={`p-3 rounded-lg text-sm space-y-2 ${index === 0 ? 'bg-blue-50 border border-blue-200' : 'bg-muted/50'}`}>
                             <div className="flex justify-between items-start">
-                              <Badge variant="secondary">{entry.status}</Badge>
+                              <p className="font-semibold capitalize text-sm">
+                                {entry.status.replace(/-/g, ' ')}
+                              </p>
                               <span className="text-xs text-muted-foreground">{new Date(entry.timestamp).toLocaleString()}</span>
                             </div>
                             <p className="text-muted-foreground whitespace-pre-wrap">{entry.notes || 'No notes provided.'}</p>

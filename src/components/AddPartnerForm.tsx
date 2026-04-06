@@ -15,7 +15,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/config/api';
 import { Checkbox } from './ui/checkbox';
 import { useFieldArray } from 'react-hook-form';
-import { ArrowLeft, Plus, X } from 'lucide-react';
+import { ArrowLeft, Plus, X, Edit } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { Label } from '@radix-ui/react-label';
 
 const identityOptions = [
   { id: 'web-app-developer', label: 'Web App Developer' },
@@ -219,12 +221,12 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
     setIsSubmitting(true);
     try {
       // Prepare feedback object
-      const feedbackObject = data.feedback_status
-        ? {
+      const feedbackArray = data.feedback_status
+        ? [{
             status: data.feedback_status,
             notes: data.feedback_notes || '',
             timestamp: new Date().toISOString(),
-          }
+          }]
         : null;
 
       // The database schema uses snake_case for column names.
@@ -244,7 +246,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
         source_of_partner: data.source_of_partner,
         designation: data.designation,
         partner_status: data.partner_status,
-        feedback: feedbackObject ? JSON.stringify(feedbackObject) : undefined,
+        feedback: feedbackArray ? JSON.stringify(feedbackArray) : undefined,
         contacts: data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : undefined,
         interactions: data.interactions && data.interactions.length > 0 ? JSON.stringify(data.interactions) : undefined,
       };
@@ -288,10 +290,66 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
     name: 'interactions',
   });
 
+  const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null);
+  const [contactData, setContactData] = useState({
+    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '',
+  });
+
+  const handleAddOrUpdateContact = () => {
+    if (!contactData.contactName) {
+      toast({ title: 'Error', description: 'Contact name is required.', variant: 'destructive' });
+      return;
+    }
+    if (contactData.contactEmail && !z.string().email().safeParse(contactData.contactEmail).success) {
+      toast({ title: 'Invalid contact email.', variant: 'destructive' });
+      return;
+    }
+
+    if (editingContactIndex !== null) {
+      contactsFieldArray.update(editingContactIndex, contactData);
+      setEditingContactIndex(null);
+    } else {
+      contactsFieldArray.append(contactData);
+    }
+    setContactData({ contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '' });
+  };
+
+  const [editingInteractionIndex, setEditingInteractionIndex] = useState<number | null>(null);
+  const [interactionData, setInteractionData] = useState({
+    isrId: '', contactPerson: '', status: 'freshfollowup-connected' as const, designation: '', contactNumber: '', contactEmail: '',
+  });
+
+  const handleAddOrUpdateInteraction = () => {
+    if (!interactionData.isrId || !interactionData.contactPerson) {
+      toast({ title: 'Error', description: 'ISR and Contact Person are required.', variant: 'destructive' });
+      return;
+    }
+    if (interactionData.contactEmail && !z.string().email().safeParse(interactionData.contactEmail).success) {
+      toast({ title: 'Invalid interaction email.', variant: 'destructive' });
+      return;
+    }
+
+    if (editingInteractionIndex !== null) {
+      interactionsFieldArray.update(editingInteractionIndex, interactionData);
+      setEditingInteractionIndex(null);
+    } else {
+      interactionsFieldArray.append(interactionData);
+    }
+    setInteractionData({ isrId: '', contactPerson: '', status: 'freshfollowup-connected', designation: '', contactNumber: '', contactEmail: '' });
+  };
+  const handleEditContact = (index: number) => {
+    setContactData(form.getValues().contacts[index]);
+    setEditingContactIndex(index);
+  };
   // Default empty contact object for appending
   const defaultContactValue = {
     contactName: '', contactDesignation: '', contactNumber: '', contactEmail: ''
 
+  };
+
+  const handleEditInteraction = (index: number) => {
+    setInteractionData(form.getValues().interactions[index]);
+    setEditingInteractionIndex(index);
   };
 
   // Default empty interaction object for appending
@@ -307,7 +365,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
   const watchedFeedbackStatus = form.watch('feedback_status');
 
   return (
-    <Card className="w-full max-w-7xl mx-auto">
+    <Card className="w-full max-w-8xl mx-auto">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Add New Partner</CardTitle>
@@ -483,7 +541,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
               />
               {watchedFeedbackStatus && (
                 <FormField control={form.control} name="feedback_notes" render={({ field }) => (
-                  <FormItem className="md:col-span-2"><FormLabel>Feedback Notes</FormLabel><FormControl><Input placeholder="Enter feedback notes" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem className="md:col-span-1"><FormLabel>Feedback Notes</FormLabel><FormControl><Input placeholder="Enter feedback notes" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               )}
             </div>
@@ -730,181 +788,167 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
             
             {/* Additional Contacts Section */}
             <Card className="mt-6">
-              <CardHeader>
-                <CardTitle className="text-lg">Additional Contacts</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {contactsFieldArray.fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-5 gap-4 border p-4 rounded-md relative">
-                    <FormField
-                      control={form.control}
-                      name={`contacts.${index}.contactName`}
-                      render={({ field: contactField }) => (
-                        <FormItem>
-                          <FormLabel>Contact Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="John Doe" {...contactField} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`contacts.${index}.contactDesignation`}
-                      render={({ field: contactField }) => (
-                        <FormItem>
-                          <FormLabel>Designation</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Sales Manager" {...contactField} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`contacts.${index}.contactNumber`}
-                      render={({ field: contactField }) => (
-                        <FormItem>
-                          <FormLabel>Contact Number</FormLabel>
-                          <FormControl>
-                            <Input type="tel" placeholder="+91-9876543210" {...contactField} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`contacts.${index}.contactEmail`}
-                      render={({ field: contactField }) => (
-                        <FormItem>
-                          <FormLabel>Contact Email</FormLabel>
-                          <FormControl>
-                            <Input type="email" placeholder="contact@example.com" {...contactField} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="md:col-span-1 flex items-end justify-start md:justify-end">
-                      <Button type="button" variant="destructive" size="icon" onClick={() => contactsFieldArray.remove(index)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" onClick={() => contactsFieldArray.append(defaultContactValue)}>
-                  <Plus className="mr-2 h-4 w-4" /> Add More Contact
-                </Button>
-              </CardContent>
-            </Card>
+            <CardHeader><CardTitle className="text-lg">Additional Contacts</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {contactsFieldArray.fields.length > 0 && (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Designation</TableHead>
+                      <TableHead>Number</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {contactsFieldArray.fields.map((field, index) => (
+                      <TableRow key={field.id}>
+                        <TableCell>{form.watch(`contacts.${index}.contactName`)}</TableCell>
+                        <TableCell>{form.watch(`contacts.${index}.contactDesignation`)}</TableCell>
+                        <TableCell>{form.watch(`contacts.${index}.contactNumber`)}</TableCell>
+                        <TableCell>{form.watch(`contacts.${index}.contactEmail`)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button type="button" variant="ghost" size="icon" onClick={() => handleEditContact(index)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="destructive" size="icon" onClick={() => contactsFieldArray.remove(index)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 border p-4 rounded-md">
+                <div className="space-y-2">
+                  <Label>Contact Name</Label>
+                  <Input placeholder="John Doe" value={contactData.contactName} onChange={e => setContactData(d => ({...d, contactName: e.target.value}))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Designation</Label>
+                  <Input placeholder="Sales Manager" value={contactData.contactDesignation} onChange={e => setContactData(d => ({...d, contactDesignation: e.target.value}))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Contact Number</Label>
+                  <Input type="tel" placeholder="+91-9876543210" value={contactData.contactNumber} onChange={e => setContactData(d => ({...d, contactNumber: e.target.value}))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Contact Email</Label>
+                  <Input type="email" placeholder="contact@example.com" value={contactData.contactEmail} onChange={e => setContactData(d => ({...d, contactEmail: e.target.value}))} />
+                </div>
+                <div className="flex items-end gap-2">
+                  <Button type="button" onClick={handleAddOrUpdateContact}>
+                    {editingContactIndex !== null ? 'Update Contact' : 'Add Contact'}
+                  </Button>
+                  {editingContactIndex !== null && (
+                    <Button type="button" variant="outline" onClick={() => { setEditingContactIndex(null); setContactData(defaultContactValue); }}>
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
             {/* Interactions Section */}
             <Card className="mt-6">
               <CardHeader>
-                <CardTitle className="text-lg">Add Interactions</CardTitle>
+                <CardTitle className="text-lg">Interactions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {interactionsFieldArray.fields.map((field, index) => (
-                  <div key={field.id} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 border p-4 rounded-md relative">
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.isrId`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>ISR</FormLabel>
-                          <Select onValueChange={interactionField.onChange} defaultValue={interactionField.value}>
-                            <FormControl>
-                              <SelectTrigger><SelectValue placeholder="Select ISR" /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {users.filter(u => ['fsr', 'bde', 'team-leader'].includes(u.role)).map(user => (
-                                <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.contactPerson`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>Contact Person</FormLabel>
-                          <FormControl><Input placeholder="Jane Smith" {...interactionField} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.status`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>Status</FormLabel>
-                          <Select onValueChange={interactionField.onChange} defaultValue={interactionField.value}>
-                            <FormControl>
-                              <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {interactionStatusOptions.map(opt => (
-                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.designation`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>Designation</FormLabel>
-                          <FormControl><Input placeholder="Manager" {...interactionField} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.contactNumber`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>Contact Number</FormLabel>
-                          <FormControl><Input type="tel" placeholder="+91..." {...interactionField} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`interactions.${index}.contactEmail`}
-                      render={({ field: interactionField }) => (
-                        <FormItem>
-                          <FormLabel>Contact Email</FormLabel>
-                          <FormControl><Input type="email" placeholder="person@example.com" {...interactionField} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex items-end justify-start">
-                      <Button type="button" variant="destructive" size="icon" onClick={() => interactionsFieldArray.remove(index)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+                {interactionsFieldArray.fields.length > 0 && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ISR</TableHead>
+                        <TableHead>Contact Person</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Designation</TableHead>
+                        <TableHead>Number</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {interactionsFieldArray.fields.map((field, index) => (
+                        <TableRow key={field.id}>
+                          <TableCell>{users.find(u => u.id === form.watch(`interactions.${index}.isrId`))?.name || 'N/A'}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.contactPerson`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.status`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.designation`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.contactNumber`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.contactEmail`)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => handleEditInteraction(index)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button type="button" variant="destructive" size="icon" onClick={() => interactionsFieldArray.remove(index)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border p-4 rounded-md">
+                  <div className="space-y-2">
+                    <Label>ISR</Label>
+                    <Select value={interactionData.isrId} onValueChange={value => setInteractionData(d => ({ ...d, isrId: value }))}>
+                      <SelectTrigger><SelectValue placeholder="Select ISR" /></SelectTrigger>
+                      <SelectContent>
+                        {users.filter(u => ['fsr', 'bde', 'team-leader'].includes(u.role)).map(user => (
+                          <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                ))}
-                <Button type="button" variant="outline" onClick={() => interactionsFieldArray.append(defaultInteractionValue)}>
-                  <Plus className="mr-2 h-4 w-4" /> Add Interaction
-                </Button>
+                  <div className="space-y-2">
+                    <Label>Contact Person</Label>
+                    <Input placeholder="Jane Smith" value={interactionData.contactPerson} onChange={e => setInteractionData(d => ({ ...d, contactPerson: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={interactionData.status} onValueChange={value => setInteractionData(d => ({ ...d, status: value as any }))}>
+                      <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                      <SelectContent>
+                        {interactionStatusOptions.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Designation</Label>
+                    <Input placeholder="Manager" value={interactionData.designation} onChange={e => setInteractionData(d => ({ ...d, designation: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Contact Number</Label>
+                    <Input type="tel" placeholder="+91..." value={interactionData.contactNumber} onChange={e => setInteractionData(d => ({ ...d, contactNumber: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Contact Email</Label>
+                    <Input type="email" placeholder="person@example.com" value={interactionData.contactEmail} onChange={e => setInteractionData(d => ({ ...d, contactEmail: e.target.value }))} />
+                  </div>
+                  <div className="flex items-end gap-2 col-span-full md:col-span-2 justify-end">
+                    <Button type="button" onClick={handleAddOrUpdateInteraction}>
+                      {editingInteractionIndex !== null ? 'Update Interaction' : 'Add Interaction'}
+                    </Button>
+                    {editingInteractionIndex !== null && (
+                      <Button type="button" variant="outline" onClick={() => { setEditingInteractionIndex(null); setInteractionData(defaultInteractionValue); }}>
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
+
+            
 
             <div className="flex justify-end space-x-2 pt-4">
               <Button type="button" variant="outline" onClick={onCancel}>
@@ -922,3 +966,22 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
 };
 
 export default AddPartnerForm;
+
+/*
+This is a high-level overview of the changes:
+
+1.  **State for Interaction Form**:
+    *   `editingInteractionIndex`: Keeps track of the interaction being edited.
+    *   `interactionData`: Holds the data for the add/edit interaction form.
+
+2.  **UI Transformation**:
+    *   The repeated `FormField` blocks for interactions are replaced with a single `<Table>` that displays all added interactions.
+    *   Each row in the table now has an "Edit" and "Delete" button.
+    *   A new form, controlled by the `interactionData` state, is placed below the table for adding or editing interactions.
+
+3.  **Handler Functions**:
+    *   `handleAddOrUpdateInteraction`: Validates and adds a new interaction or updates an existing one in the `react-hook-form` state.
+    *   `handleEditInteraction`: Populates the editing form with the data of the selected interaction.
+
+This refactoring provides a much cleaner and more intuitive way for users to manage the list of interactions.
+*/
