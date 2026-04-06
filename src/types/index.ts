@@ -20,6 +20,12 @@ export interface Customer {
 }
 
 export interface Partner {
+<<<<<<< HEAD
+=======
+  city: string;
+  vertical: string;
+  feedback: any;
+>>>>>>> 2222e5c7ab7d0c6e599b4022f410fc218a8419b8
   contacts(contacts: string): unknown;
   designation: string;
   source_of_partner: string;
@@ -54,8 +60,13 @@ export interface Partner {
   stage_owner?: string | null;
   partner_program?: string;
   margin?: string;
+<<<<<<< HEAD
   interactions(interactions: string): unknown;
   feedback(feedback: string): unknown;
+=======
+  interactions?: Interaction[];
+ 
+>>>>>>> 2222e5c7ab7d0c6e599b4022f410fc218a8419b8
 }
 
 export type OnboardingStage = 'outreach' | 'product-overview' | 'partner-program' | 'portal-activation' | 'agreement'|  'kyc'  | 'onboarded';

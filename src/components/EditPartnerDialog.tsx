@@ -122,6 +122,145 @@ const feedbackStatusOptions = [
   { value: 'presentation-call', label: 'Presentation Call' },
 ] as const;
 
+const cityOptions = [
+  // Tier 1
+  { value: 'mumbai', label: 'Mumbai' },
+  { value: 'delhi', label: 'Delhi' },
+  { value: 'bangalore', label: 'Bangalore' },
+  { value: 'hyderabad', label: 'Hyderabad' },
+  { value: 'ahmedabad', label: 'Ahmedabad' },
+  { value: 'chennai', label: 'Chennai' },
+  { value: 'kolkata', label: 'Kolkata' },
+  { value: 'surat', label: 'Surat' },
+  { value: 'pune', label: 'Pune' },
+  { value: 'jaipur', label: 'Jaipur' },
+
+  // Tier 2
+  { value: 'lucknow', label: 'Lucknow' },
+  { value: 'kanpur', label: 'Kanpur' },
+  { value: 'nagpur', label: 'Nagpur' },
+  { value: 'indore', label: 'Indore' },
+  { value: 'thane', label: 'Thane' },
+  { value: 'bhopal', label: 'Bhopal' },
+  { value: 'visakhapatnam', label: 'Visakhapatnam' },
+  { value: 'pimpri-chinchwad', label: 'Pimpri-Chinchwad' },
+  { value: 'patna', label: 'Patna' },
+  { value: 'vadodara', label: 'Vadodara' },
+  { value: 'ghaziabad', label: 'Ghaziabad' },
+  { value: 'ludhiana', label: 'Ludhiana' },
+  { value: 'agra', label: 'Agra' },
+  { value: 'nashik', label: 'Nashik' },
+  { value: 'faridabad', label: 'Faridabad' },
+  { value: 'meerut', label: 'Meerut' },
+  { value: 'rajkot', label: 'Rajkot' },
+  { value: 'kalyan-dombivali', label: 'Kalyan-Dombivali' },
+  { value: 'vasai-virar', label: 'Vasai-Virar' },
+  { value: 'varanasi', label: 'Varanasi' },
+  { value: 'srinagar', label: 'Srinagar' },
+  { value: 'aurangabad', label: 'Aurangabad' },
+  { value: 'dhanbad', label: 'Dhanbad' },
+  { value: 'amritsar', label: 'Amritsar' },
+  { value: 'navi-mumbai', label: 'Navi Mumbai' },
+  { value: 'prayagraj', label: 'Prayagraj (Allahabad)' },
+  { value: 'ranchi', label: 'Ranchi' },
+  { value: 'howrah', label: 'Howrah' },
+  { value: 'coimbatore', label: 'Coimbatore' },
+  { value: 'jabalpur', label: 'Jabalpur' },
+  { value: 'gwalior', label: 'Gwalior' },
+  { value: 'vijayawada', label: 'Vijayawada' },
+  { value: 'jodhpur', label: 'Jodhpur' },
+  { value: 'madurai', label: 'Madurai' },
+  { value: 'raipur', label: 'Raipur' },
+  { value: 'kota', label: 'Kota' },
+  { value: 'guwahati', label: 'Guwahati' },
+  { value: 'chandigarh', label: 'Chandigarh' },
+  { value: 'solapur', label: 'Solapur' },
+  { value: 'hubli-dharwad', label: 'Hubli-Dharwad' },
+  { value: 'bareilly', label: 'Bareilly' },
+  { value: 'moradabad', label: 'Moradabad' },
+  { value: 'mysore', label: 'Mysore' },
+  { value: 'gurgaon', label: 'Gurgaon' },
+  { value: 'aligarh', label: 'Aligarh' },
+  { value: 'jalandhar', label: 'Jalandhar' },
+  { value: 'tiruchirappalli', label: 'Tiruchirappalli' },
+  { value: 'bhubaneswar', label: 'Bhubaneswar' },
+  { value: 'salem', label: 'Salem' },
+  { value: 'mira-bhayandar', label: 'Mira-Bhayandar' },
+  { value: 'thiruvananthapuram', label: 'Thiruvananthapuram' },
+  { value: 'bhiwandi', label: 'Bhiwandi' },
+  { value: 'saharanpur', label: 'Saharanpur' },
+  { value: 'gorakhpur', label: 'Gorakhpur' },
+  { value: 'guntur', label: 'Guntur' },
+  { value: 'bikaner', label: 'Bikaner' },
+  { value: 'amravati', label: 'Amravati' },
+  { value: 'noida', label: 'Noida' },
+  { value: 'jamshedpur', label: 'Jamshedpur' },
+  { value: 'bhilai', label: 'Bhilai' },
+  { value: 'warangal', label: 'Warangal' },
+  { value: 'cuttack', label: 'Cuttack' },
+  { value: 'firozabad', label: 'Firozabad' },
+  { value: 'kochi', label: 'Kochi' },
+  { value: 'bhavnagar', label: 'Bhavnagar' },
+  { value: 'dehradun', label: 'Dehradun' },
+  { value: 'durgapur', label: 'Durgapur' },
+  { value: 'asansol', label: 'Asansol' },
+  { value: 'nanded', label: 'Nanded' },
+  { value: 'kolhapur', label: 'Kolhapur' },
+  { value: 'ajmer', label: 'Ajmer' },
+  { value: 'gulbarga', label: 'Gulbarga' },
+  { value: 'jamnagar', label: 'Jamnagar' },
+  { value: 'ujjain', label: 'Ujjain' },
+  { value: 'loni', label: 'Loni' },
+  { value: 'siliguri', label: 'Siliguri' },
+  { value: 'jhansi', label: 'Jhansi' },
+  { value: 'ulhasnagar', label: 'Ulhasnagar' },
+  { value: 'nellore', label: 'Nellore' },
+  { value: 'jammu', label: 'Jammu' },
+  { value: 'sangli-miraj-kupwad', label: 'Sangli-Miraj & Kupwad' },
+  { value: 'belgaum', label: 'Belgaum' },
+  { value: 'mangaluru', label: 'Mangaluru' },
+  { value: 'ambattur', label: 'Ambattur' },
+  { value: 'tirunelveli', label: 'Tirunelveli' },
+  { value: 'malegaon', label: 'Malegaon' },
+  { value: 'gaya', label: 'Gaya' },
+  { value: 'jalgaon', label: 'Jalgaon' },
+  { value: 'udaipur', label: 'Udaipur' },
+  { value: 'maheshtala', label: 'Maheshtala' },
+  { value: 'tiruppur', label: 'Tiruppur' },
+  { value: 'other', label: 'Other' }
+] as const;
+
+const verticalOptions = [
+  { value: 'food-beverages-manufacturing', label: 'Food & Beverages Manufacturing' },
+  { value: 'food-beverages-retail', label: 'Food & Beverages Retail' },
+  { value: 'hospital-healthcare', label: 'Hospital & Healthcare' },
+  { value: 'financial-services', label: 'Financial Services' },
+  { value: 'business-professional-services', label: 'Business & Professional Services' },
+  { value: 'construction', label: 'Construction' },
+  { value: 'gaming', label: 'Gaming' },
+  { value: 'logistics', label: 'Logistics' },
+  { value: 'retail-consumer', label: 'Retail & Consumer' },
+  { value: 'advertising', label: 'Advertising' },
+  { value: 'hospitality', label: 'Hospitality' },
+  { value: 'solar', label: 'Solar' },
+  { value: 'fmcg', label: 'FMCG' },
+  { value: 'e-commerce', label: 'E - commerce' },
+  { value: 'wholesale-building-materials', label: 'Wholesale Building Materials' },
+  { value: 'media', label: 'Media' },
+  { value: 'real-estate', label: 'Real Estate' },
+  { value: 'it', label: 'IT' },
+  { value: 'pharmaceutical', label: 'Pharmaceutical' },
+  { value: 'manufacturing', label: 'Manufacturing' },
+  { value: 'fintech', label: 'Fintech' },
+  { value: 'startup', label: 'Startup' },
+  { value: 'automobile-industry', label: 'Automobile industry' },
+  { value: 'transportation', label: 'Transportation' },
+  { value: 'import-export', label: 'Import & Export' },
+  { value: 'software-services', label: 'Software & services' },
+  { value: 'digital-industries', label: 'Digital Industries' },
+  { value: 'bpo', label: 'BPO' },
+  { value: 'kpo', label: 'KPO' },
+] as const;
 
 const parseJsonSafe = (value: any): string[] => {
   if (Array.isArray(value)) return value;
@@ -154,6 +293,8 @@ const partnerSchema = z.object({
   partner_type: z.string().optional(),
   source_of_partner: z.string().optional(),
   designation: z.string().optional(),
+  city: z.string().optional(),
+  vertical: z.string().optional(),
   contacts: z.array(z.object({
     contactName: z.string().min(1, 'Contact name is required.'),
     contactDesignation: z.string().optional().or(z.literal('')),
@@ -340,6 +481,8 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
         partner_type: partner.partner_type || 'silver',
         source_of_partner: partner.source_of_partner || 'webinar',
         designation: partner.designation || '',
+        city: partner.city || '',
+        vertical: partner.vertical || '',
         contacts: contacts,
         interactions: interactions,
         // Clear the fields for adding new feedback. The history is shown below.
@@ -426,6 +569,8 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
           partner_type: data.partner_type,
           source_of_partner: data.source_of_partner,
           designation: data.designation,
+          city: data.city,
+          vertical: data.vertical,
           contacts: data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : null,
           interactions: data.interactions && data.interactions.length > 0 ? JSON.stringify(data.interactions) : null,
           feedback: feedbackToSave,
@@ -497,19 +642,47 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
               <FormField control={form.control} name="stage_owner" render={({ field }) => (
                 <FormItem><Label>Stage Owner</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a stage owner" /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Unassigned</SelectItem>{users.map((user) => (<SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
               )} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="partner_type" render={({ field }) => (
                 <FormItem><Label>Partner Type</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger></FormControl><SelectContent><SelectItem value="silver">Silver</SelectItem><SelectItem value="gold">Gold</SelectItem></SelectContent></Select><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="source_of_partner" render={({ field }) => (
                 <FormItem><Label>Source of Partner</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a source" /></SelectTrigger></FormControl><SelectContent>{sourceOfPartnerOptions.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
               )} />
+              <FormField control={form.control} name="city" render={({ field }) => (
+                <FormItem>
+                  <Label>City</Label>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a city" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>{cityOptions.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField
+                control={form.control}
+                name="vertical"
+                render={({ field }) => (
+                  <FormItem>
+                    <Label>Vertical</Label>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Select a vertical" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent>{verticalOptions.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+
             </div>
             <FormField control={form.control} name="identity" render={({ field }) => (
               <FormItem>
                 <Label>Partner Identity</Label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md mt-2">
                   {identityOptions.map((item) => (
                     <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
                       <Checkbox
@@ -530,7 +703,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
             <FormField control={form.control} name="zone" render={({ field }) => (
               <FormItem>
                 <Label>Zone (Optional)</Label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md mt-2">
                   {zoneOptions.map((item) => (
                     <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
                       <Checkbox
@@ -551,7 +724,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
             <FormField control={form.control} name="partner_tag" render={({ field }) => (
               <FormItem>
                 <Label>Partner Tags</Label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md mt-2">
                   {partnerTagOptions.map((item) => (
                     <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
                       <Checkbox

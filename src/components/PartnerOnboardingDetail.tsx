@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -457,6 +457,14 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
   };
 
   const onboardingData = partnerState.onboarding || mockOnboardingData;
+
+  const additionalContacts = useMemo(() => {
+    if (typeof partner.contacts === 'string') {
+      try { return JSON.parse(partner.contacts); } catch (e) { return []; }
+    }
+    return Array.isArray(partner.contacts) ? partner.contacts : [];
+  }, [partner.contacts]);
+
 
   useEffect(() => {
     console.log("Partner details:", partner);
@@ -1147,6 +1155,20 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                   </div>
                 </div>
                 <div className="flex items-start space-x-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">City</p>
+                    <p className="text-sm">{partner.city || 'N/A'}</p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <Building className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Vertical</p>
+                    <p className="text-sm">{partner.vertical || 'N/A'}</p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-2">
                   <Award className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <div>
                     <p className="text-xs text-muted-foreground">Partner Type</p>
@@ -1176,6 +1198,31 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                   <div className="flex flex-wrap gap-1">{partner.partner_tag?.map((tag: string) => <Badge key={tag} variant="outline">{getPartnerTagLabel(tag)}</Badge>)}</div>
                 </div>
               </div>
+              {additionalContacts.length > 0 && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-2">Additional Contacts</h4>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Name</TableHead>
+                        <TableHead className="text-xs">Email</TableHead>
+                        <TableHead className="text-xs">Phone</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {additionalContacts.map((contact: any, index: number) => (
+                        <TableRow key={index}>
+                          <TableCell className="py-2 text-xs font-medium">{contact.contactName}</TableCell>
+                          <TableCell className="py-2 text-xs">
+                            {contact.contactEmail ? <a href={`mailto:${contact.contactEmail}`} className="hover:underline">{contact.contactEmail}</a> : 'N/A'}
+                          </TableCell>
+                          <TableCell className="py-2 text-xs">{contact.contactNumber || 'N/A'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
         </Card>
 
@@ -1270,11 +1317,11 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
               }
             }}
           >
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="timeline">Timeline</TabsTrigger>
               {/* <TabsTrigger value="tasks">Tasks</TabsTrigger> */}
               <TabsTrigger value="documents">Documents</TabsTrigger>
-              <TabsTrigger value="notes">Notes</TabsTrigger>
+              {/* <TabsTrigger value="notes">Notes</TabsTrigger> */}
               <TabsTrigger value="comments">Comments</TabsTrigger>
             </TabsList>
 
