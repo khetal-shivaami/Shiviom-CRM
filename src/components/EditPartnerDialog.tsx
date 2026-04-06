@@ -300,6 +300,7 @@ const partnerSchema = z.object({
     contactDesignation: z.string().optional().or(z.literal('')),
     contactNumber: z.string().optional().or(z.literal('')),
     contactEmail: z.string().email('Invalid email address.').optional().or(z.literal('')),
+    contactLinkedinURL: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
   })).optional(),
   interactions: z.array(z.object({
     isrId: z.string().min(1, 'ISR is required.'),
@@ -326,7 +327,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
 
   const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null);
   const [contactData, setContactData] = useState({
-    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '',
+    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '', contactLinkedinURL: '',
   });
   const [isInteractionFormOpen, setIsInteractionFormOpen] = useState(false);
   const [isContactFormOpen, setIsContactFormOpen] = useState(false);
@@ -336,7 +337,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
   });
 
   const defaultContactValue = {
-    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: ''
+    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '', contactLinkedinURL: ''
   };
 
   const handleAddOrUpdateContact = () => {
@@ -755,6 +756,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                         <TableHead>Designation</TableHead>
                         <TableHead>Number</TableHead>
                         <TableHead>Email</TableHead>
+                        <TableHead>LinkedIn</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -765,6 +767,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                           <TableCell>{form.watch(`contacts.${index}.contactDesignation`)}</TableCell>
                           <TableCell>{form.watch(`contacts.${index}.contactNumber`)}</TableCell>
                           <TableCell>{form.watch(`contacts.${index}.contactEmail`)}</TableCell>
+                          <TableCell>{form.watch(`contacts.${index}.contactLinkedinURL`)}</TableCell>
                           <TableCell className="text-right">
                             <Button type="button" variant="ghost" size="icon" onClick={() => handleEditContact(index)}>
                               <Edit className="h-4 w-4" />
@@ -793,7 +796,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 border p-4 rounded-md">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border p-4 rounded-md">
                       <div className="space-y-2">
                         <Label>Contact Name</Label>
                         <Input placeholder="John Doe" value={contactData.contactName} onChange={e => setContactData(d => ({ ...d, contactName: e.target.value }))} />
@@ -810,7 +813,11 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                         <Label>Contact Email</Label>
                         <Input type="email" placeholder="contact@example.com" value={contactData.contactEmail} onChange={e => setContactData(d => ({ ...d, contactEmail: e.target.value }))} />
                       </div>
-                      <div className="flex items-end gap-2">
+                      <div className="space-y-2">
+                        <Label>LinkedIn URL</Label>
+                        <Input type="url" placeholder="https://linkedin.com/in/..." value={contactData.contactLinkedinURL} onChange={e => setContactData(d => ({ ...d, contactLinkedinURL: e.target.value }))} />
+                      </div>
+                      <div className="flex items-end gap-2 md:col-start-3">
                         <Button type="button" onClick={handleAddOrUpdateContact}>{editingContactIndex !== null ? 'Update Contact' : 'Add Contact'}</Button>
                         {editingContactIndex !== null && (<Button type="button" variant="outline" onClick={() => { setEditingContactIndex(null); setContactData(defaultContactValue); setIsContactFormOpen(false); }}>Cancel</Button>)}
                       </div>

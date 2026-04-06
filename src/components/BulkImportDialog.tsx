@@ -7,9 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Download, Upload, FileText, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Customer, Partner, Product, User } from '../types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from './ui/scroll-area';
+import { API_ENDPOINTS } from '@/config/api';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface BulkImportDialogProps {
   type: 'customers' | 'partners' | 'products' | 'users';
@@ -19,6 +21,7 @@ interface BulkImportDialogProps {
 
 const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -57,31 +60,58 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
     ],
     partners: [
       {
-        name: 'Alex Johnson',
-        email: 'alex@partner.com',
-        phone: '+1-555-0127',
-        company: 'Partner Corp',
-        specialization: 'Cloud Services',
-        identity: 'system-integrator,web-app-developer',
-        status: 'active',
-        agreementSigned: 'true',
-        productTypes: 'Cloud,Security',
-        paymentTerms: 'net-30',
-        zone: 'west'
+        'ISR Name': 'John Doe',
+        'Company Name': 'Tech Innovators Inc.',
+        'Domain': 'techinnovators.com',
+        'Contact Number': '123-456-7890',
+        'Email ID': 'contact@techinnovators.com',
+        'City': 'San Francisco',
+        'Type of Business': 'SaaS',
+        'Contact Person Name 1': 'Alice',
+        'Designation 1': 'CEO',
+        'Email ID 1': 'alice@techinnovators.com',
+        'Contact 1': '111-222-3333',
+        'Linkdin Profile': 'linkedin.com/in/alice',
+        'POC name 1': 'Bob',
+        'POC Designation 1': 'CTO',
+        'POC Email ID 1': 'bob@techinnovators.com',
+        'POC Contact 1': '444-555-6666',
+        'POC Linkedin Profile 1': 'linkedin.com/in/bob',
+        'POC name 2': 'Charlie',
+        'POC Designation 2': 'Lead Developer',
+        'POC Email ID 2': 'charlie@techinnovators.com',
+        'POC Contact 2': '777-888-9999',
+        'POC Linkedin Profile 2': 'linkedin.com/in/charlie',
+        'Date': '2023-10-27',
+        'Status': 'active',
+        'Feedback': 'Interested in partnership'
       },
       {
-        name: 'Sarah Wilson',
-        email: 'sarah@webdev.com',
-        phone: '+1-555-0128',
-        company: 'WebDev Solutions',
-        specialization: 'Digital Marketing',
-        identity: 'digital-marketer',
-        status: 'active',
-        agreementSigned: 'false',
-        productTypes: 'Marketing,Analytics',
-        paymentTerms: 'net-60',
-        zone: 'south',
-        partner_tag: 'bni'
+        'ISR Name': 'Jane Smith',
+        'Company Name': 'Cloud Solutions Ltd.',
+        'Domain': 'cloudsolutions.io',
+        'Contact Number': '098-765-4321',
+        'Email ID': 'sales@cloudsolutions.io',
+        'City': 'New York',
+        'Type of Business': 'Cloud Infrastructure',
+        'Contact Person Name 1': 'David',
+        'Designation 1': 'Founder',
+        'Email ID 1': 'david@cloudsolutions.io',
+        'Contact 1': '121-232-3434',
+        'Linkdin Profile': 'linkedin.com/in/david',
+        'POC name 1': 'Eve',
+        'POC Designation 1': 'Project Manager',
+        'POC Email ID 1': 'eve@cloudsolutions.io',
+        'POC Contact 1': '545-656-7676',
+        'POC Linkedin Profile 1': 'linkedin.com/in/eve',
+        'POC name 2': '',
+        'POC Designation 2': '',
+        'POC Email ID 2': '',
+        'POC Contact 2': '',
+        'POC Linkedin Profile 2': '',
+        'Date': '2023-11-15',
+        'Status': 'prospect',
+        'Feedback': 'Follow up in Q1'
       }
     ],
     products: [
@@ -247,30 +277,86 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
   };
 
   const handleConfirmImport = async () => {
-    if (previewData.length === 0) return;
+        if (previewData.length === 0) return;
 
-    setIsProcessing(true);
-    setErrors([]);
+        setIsProcessing(true);
+        setErrors([]);
 
-    try {
-      const finalData = finalizeData(previewData);
-      console.log(`Importing ${finalData.length} ${type} records:`, finalData);
-      
-      onImport(finalData);
-      setSuccess(true);
-      await logCrmAction("Bulk Import", `Imported ${finalData.length} records into ${type}.`);
-      
-      setTimeout(() => {
-        resetState();
-        setOpen(false);
-      }, 2000);
-      
-    } catch (error) {
-      console.error('Import error:', error);
-      setErrors([error instanceof Error ? error.message : 'Failed to process file']);
-    } finally {
-      setIsProcessing(false);
-    }
+        try {
+            if (type === 'partners') {
+                const partnersToInsert = previewData.map(row => {
+                    const contacts = [];
+                    if (row['Contact Person Name 1']) {
+                        contacts.push({
+                            contactName: row['Contact Person Name 1'],
+                            contactDesignation: row['Designation 1'],
+                            contactEmail: row['Email ID 1'],
+                            contactNumber: row['Contact 1'],
+                            contactLinkedinURL: row['Linkdin Profile']
+                        });
+                    }
+                    for (let i = 1; i <= 2; i++) {
+                        if (row[`POC name ${i}`]) {
+                            contacts.push({
+                                contactName: row[`POC name ${i}`],
+                                contactDesignation: row[`POC Designation ${i}`],
+                                contactEmail: row[`POC Email ID ${i}`],
+                                contactNumber: row[`POC Contact ${i}`],
+                                contactLinkedinURL: row[`POC Linkedin Profile ${i}`]
+                            });
+                        }
+                    }
+
+                    const feedback = [];
+                    if (row['Feedback']) {
+                        feedback.push({
+                            notes: row['Feedback'],
+                            status: row['Status'],
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+
+                    return {
+                        name: row['Company Name'],
+                        company: row['Company Name'],
+                        email: row['Email ID'],
+                        contact_number: row['Contact Number'],
+                        city: row['City'],
+                        specialization: row['Type of Business'],
+                        status: row['Status'] || 'active',
+                        contacts: contacts.length > 0 ? JSON.stringify(contacts) : null,
+                        feedback: feedback.length > 0 ? JSON.stringify(feedback) : null,
+                        onboarding_stage: 'outreach',
+                        payment_terms: 'net-30', // Default value as it's not in CSV but is NOT NULL
+                        assigned_manager: row['ISR Name'],
+                    };
+                });
+
+                const { error } = await supabase.from('partners').insert(partnersToInsert);
+
+                if (error) throw error;
+
+                setSuccess(true);
+                toast({ title: "Import Successful", description: `${previewData.length} partners have been imported successfully.` });
+                await logCrmAction("Bulk Import", `Imported ${previewData.length} records into ${type}.`);
+                setTimeout(() => {
+                    resetState();
+                    setOpen(false);
+                    onImport(partnersToInsert);
+                }, 2000);
+            } else {
+                const finalData = finalizeData(previewData);
+                onImport(finalData);
+                setSuccess(true);
+                await logCrmAction("Bulk Import", `Imported ${finalData.length} records into ${type}.`);
+                setTimeout(() => { resetState(); setOpen(false); }, 2000);
+            }
+        } catch (error: any) {
+            setErrors([error.message]);
+            toast({ title: "Import Failed", description: error.message, variant: "destructive" });
+        } finally {
+            setIsProcessing(false);
+        }
   };
 
   const resetState = () => {
@@ -294,62 +380,64 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger || (
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" >
             <Upload size={16} className="mr-2" />
             Bulk Upload
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className={step === 2 ? "w-[90vw] max-w-[90vw] overflow-x-auto" : "max-w-4xl"}>
         <DialogHeader>
           <DialogTitle>Bulk Import {type.charAt(0).toUpperCase() + type.slice(1)}</DialogTitle>
         </DialogHeader>
         
         {step === 1 && (
-          <div className="space-y-4 py-4">
-          <div>
-            <Label className="text-sm font-medium">Step 1: Download Sample File</Label>
-            <p className="text-sm text-muted-foreground mb-2">
-              Download the sample CSV file to see the required format
-            </p>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={downloadSample}
-              className="w-full"
-            >
-              <Download size={16} className="mr-2" />
-              Download Sample CSV for {type}
-            </Button>
-          </div>
+          <div className="py-4">
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="space-y-2">
+                <Label className="text-base font-semibold">Step 1: Download Sample File</Label>
+                <p className="text-sm text-muted-foreground">
+                  Download the sample CSV file to see the required format and structure for importing {type}.
+                </p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={downloadSample}
+                  className="w-full"
+                >
+                  <Download size={16} className="mr-2" />
+                  Download Sample CSV for {type}
+                </Button>
+              </div>
 
-          <div>
-            <Label className="text-sm font-medium">Step 2: Upload Your Data</Label>
-            <p className="text-sm text-muted-foreground mb-2">
-              Upload your CSV file with the same format as the sample
-            </p>
-            <Input
-              type="file"
-              accept=".csv"
-              onChange={handleFileUpload}
-              className="cursor-pointer"
-              disabled={isProcessing}
-            />
-            {isProcessing && <p className="text-sm text-muted-foreground mt-2">Processing file...</p>}
-          </div>
+              <div className="space-y-2">
+                <Label className="text-base font-semibold">Step 2: Upload Your Data</Label>
+                <p className="text-sm text-muted-foreground">
+                  Upload your completed CSV file. The data will be validated before importing.
+                </p>
+                <Input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileUpload}
+                  className="cursor-pointer"
+                  disabled={isProcessing}
+                />
+                {isProcessing && <p className="text-sm text-muted-foreground mt-2">Processing file...</p>}
+              </div>
+            </div>
 
-          {errors.length > 0 && (
-            <Alert variant="destructive">
-              <AlertCircle size={16} />
-              <AlertDescription>
-                <ul className="list-disc list-inside">
-                  {errors.map((error, index) => (
-                    <li key={index}>{error}</li>
-                  ))}
-                </ul>
-              </AlertDescription>
-            </Alert>
-          )}
+            {errors.length > 0 && (
+              <Alert variant="destructive" className="mt-6">
+                <AlertCircle size={16} />
+                <AlertDescription>
+                  <ul className="list-disc list-inside">
+                    {errors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
         )}
 
@@ -359,17 +447,18 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
             <p className="text-sm text-muted-foreground">
               Review the data below. If it looks correct, click "Confirm Import".
             </p>
-            <ScrollArea className="h-72 w-full rounded-md border">
-              <Table>
+            {/* Added overflow-x-auto to ensure scrollbar appears on the ScrollArea itself */}
+            <ScrollArea className="h-72 w-full rounded-md border overflow-x-auto">
+              <Table className="min-w-max"> {/* Added min-w-max to ensure table expands beyond container width */}
                 <TableHeader className="sticky top-0 bg-muted">
                   <TableRow>
-                    {headers.map(header => <TableHead key={header}>{header}</TableHead>)}
+                    {headers.map(header => <TableHead key={header} className="whitespace-nowrap">{header}</TableHead>)}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {previewData.map((row, rowIndex) => (
                     <TableRow key={rowIndex}>
-                      {headers.map(header => <TableCell key={`${rowIndex}-${header}`}>{row[header]}</TableCell>)}
+                      {headers.map(header => <TableCell key={`${rowIndex}-${header}`} className="whitespace-nowrap">{row[header]}</TableCell>)}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -385,7 +474,7 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
               </Alert>
             )}
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-start gap-2">
               <Button variant="outline" onClick={() => setStep(1)} disabled={isProcessing}>
                 <ArrowLeft size={16} className="mr-2" /> Back to Upload
               </Button>

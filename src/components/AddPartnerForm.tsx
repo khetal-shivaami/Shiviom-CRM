@@ -320,6 +320,7 @@ const partnerSchema = z.object({
     contactDesignation: z.string().optional().or(z.literal('')),
     contactNumber: z.string().optional().or(z.literal('')),
     contactEmail: z.string().email('Invalid email address.').optional().or(z.literal('')),
+    contactLinkedinURL: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
   })).optional(),
   interactions: z.array(z.object({
     isrId: z.string().min(1, 'ISR is required.'),
@@ -450,13 +451,10 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
         source_of_partner: data.source_of_partner,
         designation: data.designation,
         partner_status: data.partner_status,
-<<<<<<< HEAD
         feedback: feedbackArray ? JSON.stringify(feedbackArray) : undefined,
-=======
         city: data.city || null,
         vertical: data.vertical || null,
         feedback: feedbackObject ? JSON.stringify(feedbackObject) : undefined,
->>>>>>> 2222e5c7ab7d0c6e599b4022f410fc218a8419b8
         contacts: data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : undefined,
         interactions: data.interactions && data.interactions.length > 0 ? JSON.stringify(data.interactions) : undefined,
       };
@@ -502,7 +500,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
 
   const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null);
   const [contactData, setContactData] = useState({
-    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '',
+    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '', contactLinkedinURL: '',
   });
 
   const handleAddOrUpdateContact = () => {
@@ -521,7 +519,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
     } else {
       contactsFieldArray.append(contactData);
     }
-    setContactData({ contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '' });
+    setContactData({ contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '', contactLinkedinURL: '' });
   };
 
   const [editingInteractionIndex, setEditingInteractionIndex] = useState<number | null>(null);
@@ -1048,6 +1046,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                       <TableHead>Designation</TableHead>
                       <TableHead>Number</TableHead>
                       <TableHead>Email</TableHead>
+                      <TableHead>LinkedIn</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1058,6 +1057,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                         <TableCell>{form.watch(`contacts.${index}.contactDesignation`)}</TableCell>
                         <TableCell>{form.watch(`contacts.${index}.contactNumber`)}</TableCell>
                         <TableCell>{form.watch(`contacts.${index}.contactEmail`)}</TableCell>
+                        <TableCell>{form.watch(`contacts.${index}.contactLinkedinURL`)}</TableCell>
                         <TableCell className="text-right">
                           <Button type="button" variant="ghost" size="icon" onClick={() => handleEditContact(index)}>
                             <Edit className="h-4 w-4" />
@@ -1072,7 +1072,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                 </Table>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 border p-4 rounded-md">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border p-4 rounded-md">
                 <div className="space-y-2">
                   <Label>Contact Name</Label>
                   <Input placeholder="John Doe" value={contactData.contactName} onChange={e => setContactData(d => ({...d, contactName: e.target.value}))} />
@@ -1089,7 +1089,11 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                   <Label>Contact Email</Label>
                   <Input type="email" placeholder="contact@example.com" value={contactData.contactEmail} onChange={e => setContactData(d => ({...d, contactEmail: e.target.value}))} />
                 </div>
-                <div className="flex items-end gap-2">
+                <div className="space-y-2">
+                  <Label>LinkedIn URL</Label>
+                  <Input type="url" placeholder="https://linkedin.com/in/..." value={contactData.contactLinkedinURL} onChange={e => setContactData(d => ({...d, contactLinkedinURL: e.target.value}))} />
+                </div>
+                <div className="flex items-end gap-2 md:col-start-3">
                   <Button type="button" onClick={handleAddOrUpdateContact}>
                     {editingContactIndex !== null ? 'Update Contact' : 'Add Contact'}
                   </Button>

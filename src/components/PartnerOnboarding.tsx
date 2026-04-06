@@ -21,6 +21,7 @@ import { PartnerStageEditForm } from '@/components/PartnerStageEditForm';
 import { useTaskManager } from '@/hooks/useTaskManager';
 import TaskNavigationBanner from '@/components/TaskNavigationBanner';
 import { supabase } from '@/integrations/supabase/client';
+import BulkImportDialog from './BulkImportDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/config/api';
 import { cn } from '@/lib/utils';
@@ -165,6 +166,50 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     }
   };
 
+  const handleBulkImport = async (importedData: any[]) => {
+    if (!importedData || importedData.length === 0) {
+        toast({ title: "No Data", description: "No data to import.", variant: "destructive" });
+        return;
+    }
+
+    try {
+        const partnersToInsert = importedData.map(p => ({
+            name: p.name,
+            email: p.email,
+            company: p.company,
+            contact_number: p.phone,
+            specialization: p.specialization,
+            identity: p.identity && p.identity.length > 0 ? JSON.stringify(p.identity) : null,
+            status: p.status || 'active',
+            agreement_signed: p.agreementSigned,
+            product_types: p.productTypes && p.productTypes.length > 0 ? JSON.stringify(p.productTypes) : null,
+            payment_terms: p.paymentTerms,
+            zone: p.zone && p.zone.length > 0 ? JSON.stringify(p.zone) : null,
+            partner_tag: p.partner_tag && p.partner_tag.length > 0 ? JSON.stringify(p.partner_tag) : null,
+            onboarding_stage: 'outreach', // Default for new partners in onboarding
+        }));
+
+        const { error } = await supabase.from('partners').insert(partnersToInsert);
+
+        if (error) {
+            throw error;
+        }
+
+        toast({
+            title: "Import Successful",
+            description: `${importedData.length} partners have been imported successfully.`,
+        });
+
+        fetchPartners(); // Refresh the partner list
+    } catch (error: any) {
+        toast({
+            title: "Import Failed",
+            description: error.message || "An error occurred during the bulk import.",
+            variant: "destructive",
+        });
+    }
+  };
+
   const fetchInvitationHistory = async () => {
     setIsHistoryLoading(true);
     try {
@@ -272,14 +317,11 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           stage_owner: p.stage_owner,
           contact_number: p.contact_number,
           contacts: p.contacts,
-<<<<<<< HEAD
           interactions: p.interactions,
           feedback: p.feedback,
-=======
           city: p.city,
           vertical: p.vertical,
 
->>>>>>> 2222e5c7ab7d0c6e599b4022f410fc218a8419b8
         };
 
         const onboardingData = p.onboarding_data ? { ...p.onboarding_data, currentStage: p.onboarding_stage } : generateMockOnboardingData(partnerBase as Partner, p.onboarding_stage);
@@ -778,17 +820,18 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
             <Share2 className="h-4 w-4 mr-2" />
             Share Documents
           </Button>
+          <BulkImportDialog type="partners" onImport={handleBulkImport} />
         </div>
       </div>
 
       {/* Show banner for partners with onboarding tasks */}
-      {filteredPartners.length > 0 && (
+      {/* {filteredPartners.length > 0 && (
         <TaskNavigationBanner
           onboardingTasks={filteredPartners.flatMap(partner => getOnboardingTasks(partner.id))}
           onNavigateToTasks={() => onNavigateToTasks?.()}
           showOnPartnerOnboarding={true}
         />
-      )}
+      )} */}
 
       <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-9 gap-4">
         {statsData.map((stat) => {
