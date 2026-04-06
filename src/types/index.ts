@@ -20,6 +20,8 @@ export interface Customer {
 }
 
 export interface Partner {
+  city: string;
+  vertical: string;
   feedback: any;
   contacts(contacts: string): unknown;
   contacts: any;
@@ -57,6 +59,7 @@ export interface Partner {
   partner_program?: string;
   margin?: string;
   interactions?: Interaction[];
+ 
 }
 
 export type OnboardingStage = 'outreach' | 'product-overview' | 'partner-program' | 'portal-activation' | 'agreement'|  'kyc'  | 'onboarded';

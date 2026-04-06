@@ -272,6 +272,9 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           stage_owner: p.stage_owner,
           contact_number: p.contact_number,
           contacts: p.contacts,
+          city: p.city,
+          vertical: p.vertical,
+
         };
 
         const onboardingData = p.onboarding_data ? { ...p.onboarding_data, currentStage: p.onboarding_stage } : generateMockOnboardingData(partnerBase as Partner, p.onboarding_stage);
