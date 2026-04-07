@@ -3957,7 +3957,7 @@ const interactions = useMemo(() => {
                 </Card> */}
 
                 {/* Notes Card */}
-                <Card>
+                {/* <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">
                       <StickyNote size={18} /> Notes
@@ -3971,7 +3971,7 @@ const interactions = useMemo(() => {
     
                     </ScrollArea>
                   </CardContent>
-                </Card>
+                </Card> */}
               </div>
             </CardContent>
           </CollapsibleContent>
