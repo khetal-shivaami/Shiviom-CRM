@@ -313,8 +313,6 @@ const partnerSchema = z.object({
   }),
   city: z.string().optional(),
   vertical: z.string().optional(),
-  feedback_status: z.string().optional(),
-  feedback_notes: z.string().optional(),
   contacts: z.array(z.object({
     contactName: z.string().min(1, 'Contact name is required.'),
     contactDesignation: z.string().optional().or(z.literal('')),
@@ -328,6 +326,9 @@ const partnerSchema = z.object({
     designation: z.string().optional().or(z.literal('')),
     contactNumber: z.string().optional().or(z.literal('')),
     contactEmail: z.string().email('Invalid email address.').optional().or(z.literal('')),
+    feedback_status: z.string().optional(),
+    feedback_notes: z.string().optional(),
+    feedback_timestamp: z.string().optional(),
     status: z.enum(['freshfollowup-connected', 'followup-not-connected', 'presentation', 'feedback'], {
       required_error: "Status is required.",
     }),
@@ -389,8 +390,6 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
       partner_status: undefined,
       city: undefined,
       vertical: undefined,
-      feedback_status: undefined,
-      feedback_notes: '',
       contacts: [],
       interactions: [],
     },
@@ -425,14 +424,6 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
   const onSubmit = async (data: PartnerFormData) => {
     setIsSubmitting(true);
     try {
-      // Prepare feedback object
-      const feedbackArray = data.feedback_status
-        ? [{
-            status: data.feedback_status,
-            notes: data.feedback_notes || '',
-            timestamp: new Date().toISOString(),
-          }]
-        : null;
 
       // The database schema uses snake_case for column names.
       const newPartnerData = {
@@ -451,10 +442,8 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
         source_of_partner: data.source_of_partner,
         designation: data.designation,
         partner_status: data.partner_status,
-        feedback: feedbackArray ? JSON.stringify(feedbackArray) : undefined,
         city: data.city || null,
         vertical: data.vertical || null,
-        feedback: feedbackObject ? JSON.stringify(feedbackObject) : undefined,
         contacts: data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : undefined,
         interactions: data.interactions && data.interactions.length > 0 ? JSON.stringify(data.interactions) : undefined,
       };
@@ -474,6 +463,10 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
       form.reset();
       setAssignedUserIds([]);
       contactsFieldArray.replace([]); // Reset contacts field array too
+      if (error) {
+        throw error;
+      }
+
       interactionsFieldArray.replace([]); // Reset interactions field array
       onSuccess();
     } catch (error) {
@@ -524,7 +517,15 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
 
   const [editingInteractionIndex, setEditingInteractionIndex] = useState<number | null>(null);
   const [interactionData, setInteractionData] = useState({
-    isrId: '', contactPerson: '', status: 'freshfollowup-connected' as const, designation: '', contactNumber: '', contactEmail: '',
+    isrId: '',
+    contactPerson: '',
+    status: 'freshfollowup-connected' as const,
+    designation: '',
+    contactNumber: '',
+    contactEmail: '',
+    feedback_status: '',
+    feedback_notes: '',
+    feedback_timestamp: '',
   });
 
   const handleAddOrUpdateInteraction = () => {
@@ -537,13 +538,20 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
       return;
     }
 
+    const interactionWithTimestamp = { ...interactionData };
+    // Add timestamp only if feedback is being provided
+    if (interactionData.feedback_status || interactionData.feedback_notes) {
+      interactionWithTimestamp.feedback_timestamp = new Date().toISOString();
+    }
+
     if (editingInteractionIndex !== null) {
-      interactionsFieldArray.update(editingInteractionIndex, interactionData);
+      interactionsFieldArray.update(editingInteractionIndex, interactionWithTimestamp);
       setEditingInteractionIndex(null);
     } else {
-      interactionsFieldArray.append(interactionData);
+      interactionsFieldArray.append(interactionWithTimestamp);
     }
-    setInteractionData({ isrId: '', contactPerson: '', status: 'freshfollowup-connected', designation: '', contactNumber: '', contactEmail: '' });
+    // Reset form to default values
+    setInteractionData(defaultInteractionValue);
   };
   const handleEditContact = (index: number) => {
     setContactData(form.getValues().contacts[index]);
@@ -567,6 +575,9 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
     designation: '',
     contactNumber: '',
     contactEmail: '',
+    feedback_status: '',
+    feedback_notes: '',
+    feedback_timestamp: '',
     status: 'freshfollowup-connected' as const,
   };
 
@@ -765,33 +776,6 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
               </FormItem>
             )}
             />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <FormField
-                control={form.control}
-                name="feedback_status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Feedback</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select feedback status" /></SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {feedbackStatusOptions.map(option => (
-                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {watchedFeedbackStatus && (
-                <FormField control={form.control} name="feedback_notes" render={({ field }) => (
-                  <FormItem className="md:col-span-1"><FormLabel>Feedback Notes</FormLabel><FormControl><Input placeholder="Enter feedback notes" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-              )}
             </div>
             
             <FormField
@@ -1123,6 +1107,9 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                         <TableHead>Designation</TableHead>
                         <TableHead>Number</TableHead>
                         <TableHead>Email</TableHead>
+                        <TableHead>Feedback Status</TableHead>
+                        <TableHead>Feedback Notes</TableHead>
+                        <TableHead>Feedback Time</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1135,6 +1122,11 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                           <TableCell>{form.watch(`interactions.${index}.designation`)}</TableCell>
                           <TableCell>{form.watch(`interactions.${index}.contactNumber`)}</TableCell>
                           <TableCell>{form.watch(`interactions.${index}.contactEmail`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.feedback_status`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.feedback_notes`)}</TableCell>
+                          <TableCell>
+                            {form.watch(`interactions.${index}.feedback_timestamp`) ? new Date(form.watch(`interactions.${index}.feedback_timestamp`)).toLocaleString() : 'N/A'}
+                          </TableCell>
                           <TableCell className="text-right">
                             <Button type="button" variant="ghost" size="icon" onClick={() => handleEditInteraction(index)}>
                               <Edit className="h-4 w-4" />
@@ -1149,7 +1141,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                   </Table>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border p-4 rounded-md">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border p-4 rounded-md">
                   <div className="space-y-2">
                     <Label>ISR</Label>
                     <Select value={interactionData.isrId} onValueChange={value => setInteractionData(d => ({ ...d, isrId: value }))}>
@@ -1188,7 +1180,29 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                     <Label>Contact Email</Label>
                     <Input type="email" placeholder="person@example.com" value={interactionData.contactEmail} onChange={e => setInteractionData(d => ({ ...d, contactEmail: e.target.value }))} />
                   </div>
-                  <div className="flex items-end gap-2 col-span-full md:col-span-2 justify-end">
+                  <div className="space-y-2">
+                    <Label>Feedback Status</Label>
+                    <Select value={interactionData.feedback_status} onValueChange={value => setInteractionData(d => ({ ...d, feedback_status: value }))}>
+                      <SelectTrigger><SelectValue placeholder="Select feedback status" /></SelectTrigger>
+                      <SelectContent>
+                        {feedbackStatusOptions.map(option => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {interactionData.feedback_status && (
+                    <div className="space-y-2">
+                      <Label>Feedback Notes</Label>
+                      <Input
+                        placeholder="Enter feedback notes"
+                        value={interactionData.feedback_notes}
+                        onChange={e => setInteractionData(d => ({ ...d, feedback_notes: e.target.value }))}
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-end gap-2 col-span-full md:col-span-3 justify-end">
                     <Button type="button" onClick={handleAddOrUpdateInteraction}>
                       {editingInteractionIndex !== null ? 'Update Interaction' : 'Add Interaction'}
                     </Button>

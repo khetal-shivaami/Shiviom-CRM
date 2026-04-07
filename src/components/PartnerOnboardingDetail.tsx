@@ -466,10 +466,23 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
   }, [partner.contacts]);
 
   const interactions = useMemo(() => {
+    let parsedInteractions = [];
     if (typeof partner.interactions === 'string') {
-      try { return JSON.parse(partner.interactions); } catch (e) { return []; }
+      try { 
+        const parsed = JSON.parse(partner.interactions);
+        parsedInteractions = Array.isArray(parsed) ? parsed : [];
+      } catch (e) { 
+        parsedInteractions = [];
+      }
+    } else if (Array.isArray(partner.interactions)) {
+      parsedInteractions = partner.interactions;
     }
-    return Array.isArray(partner.interactions) ? partner.interactions : [];
+
+    // Sort by feedback_timestamp in descending order (newest first)
+    parsedInteractions.sort((a, b) => 
+      new Date(b.feedback_timestamp || 0).getTime() - new Date(a.feedback_timestamp || 0).getTime()
+    );
+    return parsedInteractions;
   }, [partner.interactions]);
 
 

@@ -311,6 +311,9 @@ const partnerSchema = z.object({
     status: z.enum(['freshfollowup-connected', 'followup-not-connected', 'presentation', 'feedback'], {
       required_error: "Status is required.",
     }),
+    feedback_status: z.string().optional(),
+    feedback_notes: z.string().optional(),
+    feedback_timestamp: z.string().optional(),
   })).optional(),
   feedback_status: z.string().optional(),
   feedback_notes: z.string().optional(),
@@ -333,18 +336,26 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
   const [isContactFormOpen, setIsContactFormOpen] = useState(false);
   const [editingInteractionIndex, setEditingInteractionIndex] = useState<number | null>(null);
   const [interactionData, setInteractionData] = useState({
-    isrId: '', contactPerson: '', status: 'freshfollowup-connected' as const, designation: '', contactNumber: '', contactEmail: '',
+    isrId: '', contactPerson: '', status: 'freshfollowup-connected' as const, designation: '', contactNumber: '', contactEmail: '', feedback_status: '', feedback_notes: ''
   });
+
+  const defaultInteractionValue = {
+    isrId: '',
+    contactPerson: '',
+    designation: '',
+    contactNumber: '',
+    contactEmail: '',
+    status: 'freshfollowup-connected' as const,
+    feedback_status: '',
+    feedback_notes: '',
+    feedback_timestamp: '', // Initialize timestamp field
+  };
 
   const defaultContactValue = {
     contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '', contactLinkedinURL: ''
   };
 
   const handleAddOrUpdateContact = () => {
-    if (!contactData.contactName) {
-      toast({ title: 'Error', description: 'Contact name is required.', variant: 'destructive' });
-      return;
-    }
     if (contactData.contactEmail && !z.string().email().safeParse(contactData.contactEmail).success) {
       toast({ title: 'Invalid contact email.', variant: 'destructive' });
       return;
@@ -359,16 +370,6 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
     setContactData(defaultContactValue);
     setIsContactFormOpen(false);
   };
-
-  const defaultInteractionValue = {
-    isrId: '',
-    contactPerson: '',
-    designation: '',
-    contactNumber: '',
-    contactEmail: '',
-    status: 'freshfollowup-connected' as const,
-  };
-
   const handleAddOrUpdateInteraction = () => {
     if (!interactionData.isrId || !interactionData.contactPerson) {
       toast({ title: 'Error', description: 'ISR and Contact Person are required.', variant: 'destructive' });
@@ -379,11 +380,18 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
       return;
     }
 
+    const interactionWithTimestamp = { ...interactionData };
+    // Add timestamp only if feedback is being provided
+    if (interactionData.feedback_status || interactionData.feedback_notes) {
+      interactionWithTimestamp.feedback_timestamp = new Date().toISOString();
+    }
+
     if (editingInteractionIndex !== null) {
-      interactionFieldArray.update(editingInteractionIndex, interactionData);
+      interactionFieldArray.update(editingInteractionIndex, interactionWithTimestamp);
       setEditingInteractionIndex(null);
     } else {
-      interactionFieldArray.append(interactionData);
+      // Prepend to show the newest interaction at the top of the list.
+      interactionFieldArray.prepend(interactionWithTimestamp);
     }
     setInteractionData(defaultInteractionValue);
     setIsInteractionFormOpen(false);
@@ -419,7 +427,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
         setIsContactFormOpen(true);
     }
   };
-
+  
   const handleEditInteraction = (index: number) => {
     const interactions = form.getValues().interactions;
     if (interactions && interactions[index]) {
@@ -443,7 +451,16 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
             try {
               // It's possible partner.interactions is an empty string or not a valid JSON array.
               const parsed = partner.interactions ? JSON.parse(partner.interactions) : [];
-              return Array.isArray(parsed) ? parsed : [];
+              // Ensure each interaction object has a feedback_timestamp, even if empty.
+              const mapped = Array.isArray(parsed) ? parsed.map((item: any) => ({ ...item, feedback_timestamp: item.feedback_timestamp || '' })) : [];
+              // Sort interactions by feedback_timestamp in descending order.
+              mapped.sort((a, b) => {
+                if (!a.feedback_timestamp && !b.feedback_timestamp) return 0;
+                if (!a.feedback_timestamp) return 1; // b comes first if a has no timestamp
+                if (!b.feedback_timestamp) return -1; // a comes first if b has no timestamp
+                return new Date(b.feedback_timestamp).getTime() - new Date(a.feedback_timestamp).getTime();
+              });
+              return mapped;
             } catch (e) { return []; }
           })()
         : (Array.isArray(partner.interactions) ? partner.interactions : []);
@@ -843,6 +860,9 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                         <TableHead>Designation</TableHead>
                         <TableHead>Number</TableHead>
                         <TableHead>Email</TableHead>
+                        <TableHead>FeedBack Status</TableHead>
+                        <TableHead>Feedback Notes</TableHead>
+                        <TableHead>Feedback Time</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -855,6 +875,11 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                           <TableCell>{form.watch(`interactions.${index}.designation`)}</TableCell>
                           <TableCell>{form.watch(`interactions.${index}.contactNumber`)}</TableCell>
                           <TableCell>{form.watch(`interactions.${index}.contactEmail`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.feedback_status`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.feedback_notes`)}</TableCell>
+                          <TableCell>
+                            {form.watch(`interactions.${index}.feedback_timestamp`) ? new Date(form.watch(`interactions.${index}.feedback_timestamp`)).toLocaleString() : 'N/A'}
+                          </TableCell>
                           <TableCell className="text-right">
                             <Button type="button" variant="ghost" size="icon" onClick={() => handleEditInteraction(index)}>
                               <Edit className="h-4 w-4" />
@@ -922,6 +947,24 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                         <Label>Contact Email</Label>
                         <Input type="email" placeholder="person@example.com" value={interactionData.contactEmail} onChange={e => setInteractionData(d => ({ ...d, contactEmail: e.target.value }))} />
                       </div>
+                      <div className="space-y-2">
+                        <Label>Feedback Status</Label>
+                        <Select value={interactionData.feedback_status} onValueChange={value => setInteractionData(d => ({ ...d, feedback_status: value }))}>
+                          <SelectTrigger><SelectValue placeholder="Select feedback status" /></SelectTrigger>
+                          <SelectContent>
+                            {feedbackStatusOptions.map(option => (
+                              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Feedback Notes</Label>
+                        <Input
+                          placeholder="Enter feedback notes"
+                          value={interactionData.feedback_notes}
+                          onChange={e => setInteractionData(d => ({ ...d, feedback_notes: e.target.value }))} />
+                      </div>
                       <div className="flex items-end gap-2 col-span-full md:col-span-2 justify-end">
                         <Button type="button" onClick={handleAddOrUpdateInteraction}>
                           {editingInteractionIndex !== null ? 'Update Interaction' : 'Add Interaction'}
@@ -938,7 +981,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
               </CardContent>
             </Card>
 
-            <Card className="mt-6">
+            {/* <Card className="mt-6">
               <CardHeader>
                 <CardTitle className="text-lg">Feedback</CardTitle>
               </CardHeader>
@@ -977,7 +1020,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </Card> */}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
