@@ -84,6 +84,7 @@ const feedbackStatusOptions = [
   { value: 'email', label: 'Email' },
   { value: 'followup', label: 'Followup' },
   { value: 'interested', label: 'Interested' },
+  { value: 'invalid', label: 'Invalid' },
   { value: 'nc', label: 'NC' },
   { value: 'not-interested', label: 'Not Interested' },
   { value: 'price-challenge', label: 'Price challenge' },

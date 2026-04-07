@@ -52,6 +52,7 @@ interface InvitationHistoryItem {
   reseller_id: string;
 }
 interface EnhancedPartner extends Partner {
+  feedback_status: string;
   onboarding: PartnerOnboardingData;
 }
 
@@ -61,6 +62,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   const [searchTerm, setSearchTerm] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
   const [ownerFilter, setOwnerFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [presetDateRange, setPresetDateRange] = useState('all');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -301,6 +303,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           specialization: p.specialization,          
           identity: parseJsonSafe(p.identity),
           status: p.status,
+          feedback_status: p.feedback_status,
           agreementSigned: p.agreement_signed,
           agreementDate: p.agreement_date ? new Date(p.agreement_date) : undefined,
           productTypes: p.product_types || [],
@@ -342,8 +345,8 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
 
   useEffect(() => {
     // Reset to first page when filters change
-    setCurrentPage(1); 
-  }, [searchTerm, stageFilter, ownerFilter, dateRange, presetDateRange]);
+    setCurrentPage(1);
+  }, [searchTerm, stageFilter, ownerFilter, statusFilter, dateRange, presetDateRange]);
 
   useEffect(() => {
     const now = new Date();
@@ -379,6 +382,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     setSearchTerm('');
     setStageFilter('all');
     setOwnerFilter('all');
+    setStatusFilter('all');
     setPresetDateRange('all'); // This will also clear dateRange via its useEffect
   };
 
@@ -509,16 +513,19 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
 
   const filteredPartners = partnersData.filter(partner => {
     // Exclude 'onboarded' partners from the default "All Stages" view.
-    // They will only appear if the 'onboarded' filter is explicitly selected.
-    if (stageFilter === 'all' && partner.onboarding.currentStage === 'onboarded') {
+    // They will only appear if the 'onboarded' filter is explicitly selected,
+    // or if another filter (like status) is active.
+    if (stageFilter === 'all' && statusFilter === 'all' && partner.onboarding.currentStage === 'onboarded') {
       return false;
     }
 
     const matchesSearch = partner.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          partner.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          partner.company.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStage = stageFilter === 'all' || partner.onboarding.currentStage === stageFilter;
+    // If a status filter is active, don't filter by stage unless a specific stage is also selected.
+    const matchesStage = (statusFilter !== 'all' && stageFilter === 'all') || stageFilter === 'all' || partner.onboarding.currentStage === stageFilter;
     const matchesOwner = ownerFilter === 'all' || 
+                         (ownerFilter === 'all' && statusFilter !== 'all' ? true : false) || // When a status is selected, don't filter by owner unless specified
                          (ownerFilter === 'unassigned' && !partner.stage_owner) ||
                          partner.stage_owner === ownerFilter;
 
@@ -532,7 +539,12 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       matchesDate = partnerDate >= dateRange.from && partnerDate <= toDate;
     }
 
-    return matchesSearch && matchesStage && matchesOwner && matchesDate;
+    const partnerFeedbackStatus = (partner.feedback_status || '').toLowerCase(); // Database value
+    const selectedStatus = statusFilter.toLowerCase(); // UI filter value
+
+    const matchesStatus = statusFilter === 'all' || partnerFeedbackStatus === selectedStatus;
+
+    return matchesSearch && matchesStage && matchesOwner && matchesDate && matchesStatus;
   });
 
   // Pagination logic
@@ -909,6 +921,18 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                 {users.map(user => (
                   <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[200px]">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Filter by Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="invalid">Invalid</SelectItem>
+                <SelectItem value="not-interested">Not Interested</SelectItem>
               </SelectContent>
             </Select>
             <div className="flex items-center space-x-2">
