@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; 
 import { Progress } from '@/components/ui/progress';
-import { Search, UserPlus, Filter, CheckCircle, Clock, AlertCircle, Eye, Users, FileText, Handshake, Shield, PenTool, Trophy, Link, KeyRound, X, Edit, Calendar as CalendarIcon, RotateCcw, ChevronsUpDown, Loader2, History, Share2, Globe } from 'lucide-react';
+import { Search, UserPlus, Filter, CheckCircle, Clock, AlertCircle, Eye, Users, FileText, Handshake, Shield, PenTool, Trophy, Link, KeyRound, X, Edit, Calendar as CalendarIcon, RotateCcw, ChevronsUpDown, Loader2, History, Share2, Globe, Download } from 'lucide-react';
 import { DateRange, DayPicker } from 'react-day-picker';
 import { Partner, User, OnboardingStage, PartnerOnboardingData } from '@/types';
 import AddPartnerForm from '@/components/AddPartnerForm';
@@ -191,7 +191,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
             onboarding_stage: 'outreach', // Default for new partners in onboarding
         }));
 
-        const { error } = await supabase.from('partners').insert(partnersToInsert);
+        const { error } = await supabase.from('partners').insert(partnersToInsert as any);
 
         if (error) {
             throw error;
@@ -262,6 +262,33 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     return [];
   };
 
+  const parseInteractionsSafe = (value: any): any[] => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string' && value.trim()) {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  const getLatestInteractionFeedbackStatus = (interactionsValue: any): string => {
+    const interactions = parseInteractionsSafe(interactionsValue);
+
+    if (interactions.length === 0) return '';
+
+    const latestInteraction = [...interactions].sort((a, b) => {
+      const aTime = a?.feedback_timestamp ? new Date(a.feedback_timestamp).getTime() : 0;
+      const bTime = b?.feedback_timestamp ? new Date(b.feedback_timestamp).getTime() : 0;
+      return bTime - aTime;
+    })[0];
+
+    return latestInteraction?.feedback_status || '';
+  };
+
   const fetchPartners = async () => {
     setIsLoading(true);
     try {
@@ -294,22 +321,23 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       }
 
       const enhancedPartners: EnhancedPartner[] = allPartners.map((p: any) => {
-        const partnerBase: Omit<Partner, 'onboarding'> = {
+        const latestFeedbackStatus = getLatestInteractionFeedbackStatus(p.interactions);
+
+        const partnerBase: any = {
           id: p.id,
           name: p.name,
           email: p.email,
           company: p.company,
           phone: p.contact_number,
           specialization: p.specialization,          
-          identity: parseJsonSafe(p.identity),
+          identity: parseJsonSafe(p.identity) as any,
           status: p.status,
-          feedback_status: p.feedback_status,
           agreementSigned: p.agreement_signed,
           agreementDate: p.agreement_date ? new Date(p.agreement_date) : undefined,
           productTypes: p.product_types || [],
           paymentTerms: p.payment_terms,
-          zone: parseJsonSafe(p.zone),
-          partner_tag: parseJsonSafe(p.partner_tag),
+          zone: parseJsonSafe(p.zone) as any,
+          partner_tag: parseJsonSafe(p.partner_tag) as any,
           assignedUserIds: p.assigned_user_ids || [],
           createdAt: new Date(p.created_at),
           customersCount: p.customers_count || 0,
@@ -328,7 +356,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
         };
 
         const onboardingData = p.onboarding_data ? { ...p.onboarding_data, currentStage: p.onboarding_stage } : generateMockOnboardingData(partnerBase as Partner, p.onboarding_stage);
-        return { ...partnerBase, onboarding: onboardingData };
+        return { ...partnerBase, feedback_status: latestFeedbackStatus || p.feedback_status || '', onboarding: onboardingData };
       });
       setPartnersData(enhancedPartners);
 
@@ -384,6 +412,76 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     setOwnerFilter('all');
     setStatusFilter('all');
     setPresetDateRange('all'); // This will also clear dateRange via its useEffect
+  };
+
+  const escapeCsvValue = (value: unknown) => {
+    if (value === null || value === undefined) return '""';
+    const stringValue = Array.isArray(value)
+      ? value.join(', ')
+      : value instanceof Date
+        ? value.toLocaleDateString()
+        : String(value);
+
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      const headers = [
+        'Partner Name',
+        'Company',
+        'Email',
+        'Phone',
+        'Current Stage',
+        'Progress (%)',
+        'Stage Owner',
+        'Status',
+        'Created Date',
+        'Last Activity',
+      ];
+
+      const csvRows = filteredPartners.map((partner) => [
+        partner.name,
+        partner.company,
+        partner.email,
+        partner.phone || partner.contact_number || '',
+        stageConfig[partner.onboarding.currentStage].title,
+        partner.onboarding.overallProgress,
+        partner.stage_owner
+          ? (users.find((user) => user.id === partner.stage_owner)?.name || 'Unknown Owner')
+          : 'Unassigned',
+        partner.feedback_status || partner.status || '',
+        partner.createdAt,
+        partner.onboarding.lastActivity,
+      ]);
+
+      const csvContent = [
+        headers.map(escapeCsvValue).join(','),
+        ...csvRows.map((row) => row.map(escapeCsvValue).join(',')),
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const timestamp = format(new Date(), 'yyyy-MM-dd-HH-mm');
+      link.href = downloadUrl;
+      link.setAttribute('download', `partner-onboarding-${timestamp}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      toast({
+        title: 'Export Successful',
+        description: `${filteredPartners.length} partner records exported to CSV.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Export Failed',
+        description: error?.message || 'Unable to export partner data to CSV.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handlePartnerUpdate = async (updatedPartner: EnhancedPartner) => {
@@ -539,7 +637,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       matchesDate = partnerDate >= dateRange.from && partnerDate <= toDate;
     }
 
-    const partnerFeedbackStatus = (partner.feedback_status || '').toLowerCase(); // Database value
+    const partnerFeedbackStatus = (partner.feedback_status || '').toLowerCase(); // Latest interaction feedback_status
     const selectedStatus = statusFilter.toLowerCase(); // UI filter value
 
     const matchesStatus = statusFilter === 'all' || partnerFeedbackStatus === selectedStatus;
@@ -816,6 +914,10 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           </p>
         </div>
         <div className="flex space-x-2">
+          <Button variant="outline" onClick={handleExportCsv} disabled={isLoading || filteredPartners.length === 0}>
+            <Download className="h-4 w-4 mr-2" />
+            Export Data
+          </Button>
           <Button onClick={() => setShowAddForm(true)}>
             <UserPlus className="h-4 w-4 mr-2" />
             Add Partner

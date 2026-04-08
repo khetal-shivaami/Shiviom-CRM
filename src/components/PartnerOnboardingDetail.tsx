@@ -1218,62 +1218,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                   <div className="flex flex-wrap gap-1">{partner.partner_tag?.map((tag: string) => <Badge key={tag} variant="outline">{getPartnerTagLabel(tag)}</Badge>)}</div>
                 </div>
               </div>
-              {additionalContacts.length > 0 && (
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium mb-2">Additional Contacts</h4>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Name</TableHead>
-                        <TableHead className="text-xs">Email</TableHead>
-                        <TableHead className="text-xs">Designation</TableHead>
-                        <TableHead className="text-xs">Phone</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {additionalContacts.map((contact: any, index: number) => (
-                        <TableRow key={index}>
-                          <TableCell className="py-2 text-xs font-medium">{contact.contactName}</TableCell>
-                          <TableCell className="py-2 text-xs">
-                            {contact.contactEmail ? <a href={`mailto:${contact.contactEmail}`} className="hover:underline">{contact.contactEmail}</a> : 'N/A'}
-                          </TableCell>
-                          <TableCell className="py-2 text-xs">{contact.contactDesignation || 'N/A'}</TableCell>
-                          <TableCell className="py-2 text-xs">{contact.contactNumber || 'N/A'}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-              {interactions.length > 0 && (
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-medium mb-2">Interactions</h4>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">ISR</TableHead>
-                        <TableHead className="text-xs">Contact Person</TableHead>
-                        <TableHead className="text-xs">Status</TableHead>
-                        <TableHead className="text-xs">Email</TableHead>
-                        <TableHead className="text-xs">Phone</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {interactions.map((interaction: any, index: number) => (
-                        <TableRow key={index}>
-                          <TableCell className="py-2 text-xs font-medium">{getUserName(interaction.isrId)}</TableCell>
-                          <TableCell className="py-2 text-xs">{interaction.contactPerson}</TableCell>
-                          <TableCell className="py-2 text-xs">{interaction.status}</TableCell>
-                          <TableCell className="py-2 text-xs">
-                            {interaction.contactEmail ? <a href={`mailto:${interaction.contactEmail}`} className="hover:underline">{interaction.contactEmail}</a> : 'N/A'}
-                          </TableCell>
-                          <TableCell className="py-2 text-xs">{interaction.contactNumber || 'N/A'}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+              
             </CardContent>
         </Card>
 
@@ -1368,12 +1313,14 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
               }
             }}
           >
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="timeline">Timeline</TabsTrigger>
               {/* <TabsTrigger value="tasks">Tasks</TabsTrigger> */}
               <TabsTrigger value="documents">Documents</TabsTrigger>
               {/* <TabsTrigger value="notes">Notes</TabsTrigger> */}
               <TabsTrigger value="comments">Comments</TabsTrigger>
+              <TabsTrigger value="additional-contacts">Additional Contacts</TabsTrigger>
+              <TabsTrigger value="interactions">Interactions</TabsTrigger>
             </TabsList>
 
             <TabsContent value="timeline" className="space-y-6">
@@ -1639,10 +1586,100 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
               </Card>
             </TabsContent>
 
+            <TabsContent value="additional-contacts">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Additional Contacts</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {additionalContacts.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Designation</TableHead>
+                          <TableHead>Phone</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {additionalContacts.map((contact: any, index: number) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">{contact.contactName || 'N/A'}</TableCell>
+                            <TableCell>
+                              {contact.contactEmail ? (
+                                <a href={`mailto:${contact.contactEmail}`} className="hover:underline">
+                                  {contact.contactEmail}
+                                </a>
+                              ) : (
+                                'N/A'
+                              )}
+                            </TableCell>
+                            <TableCell>{contact.contactDesignation || 'N/A'}</TableCell>
+                            <TableCell>{contact.contactNumber || 'N/A'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-muted-foreground text-center py-4">No additional contacts found.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="interactions">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Interactions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {interactions.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ISR</TableHead>
+                          <TableHead>Contact Person</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead>Feedback Status</TableHead>
+                          <TableHead>Feedback Notes</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {interactions.map((interaction: any, index: number) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">{getUserName(interaction.isrId)}</TableCell>
+                            <TableCell>{interaction.contactPerson || 'N/A'}</TableCell>
+                            <TableCell>{interaction.status || 'N/A'}</TableCell>
+                            <TableCell>
+                              {interaction.contactEmail ? (
+                                <a href={`mailto:${interaction.contactEmail}`} className="hover:underline">
+                                  {interaction.contactEmail}
+                                </a>
+                              ) : (
+                                'N/A'
+                              )}
+                            </TableCell>
+                            <TableCell>{interaction.contactNumber || 'N/A'}</TableCell>
+                            <TableCell>{interaction.feedback_status || 'N/A'}</TableCell>
+                            <TableCell>{interaction.feedback_notes || 'N/A'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <p className="text-muted-foreground text-center py-4">No interactions found.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
             <TabsContent value="notes">
               <Card>
                 <CardHeader>
-                  <CardTitle>Notes &amp; Comments</CardTitle>
+                  <CardTitle>Notes & Comments</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
