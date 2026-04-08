@@ -622,7 +622,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1500px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[1600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Partner: {partner.name}</DialogTitle>
           <DialogDescription>Update the details for this partner.</DialogDescription>
