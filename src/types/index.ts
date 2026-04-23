@@ -252,6 +252,7 @@ export interface Dashboard {
 }
 
 export interface Task {
+  assigned_to(assigned_to: any): import("react").ReactNode;
   id: string;
   title: string;
   description?: string;

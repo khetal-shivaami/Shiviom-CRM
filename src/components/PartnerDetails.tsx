@@ -235,6 +235,10 @@ interface KBArticle {
 }
 
 interface LicenseHistoryItem {
+  order_amount: null;
+  numberOfUser: ReactNode;
+  zohoinvoiceid: ReactNode;
+  transactionExecutionDate: string | number | Date;
   subscription_id: string;
   sku_name: string;
   added_licenses: string;

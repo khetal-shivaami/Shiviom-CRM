@@ -589,7 +589,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       setPartnersData(enhancedPartners);
 
     } catch (error: any) {
-      toast({ title: "Error fetching partners", description: error.message, variant: "destructive" });
+      toast({ title: "Error fetching partners", description: error.m3essage, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
