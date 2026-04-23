@@ -19,7 +19,7 @@ const UserAssignmentSelect = ({
   assignedUserIds, 
   onAssignmentChange, 
   maxAssignments = 3,
-  allowedRoles = ['fsr', 'team-leader', 'bde']
+  allowedRoles = ['fsr', 'team-leader', 'bde','isr']
 }: UserAssignmentSelectProps) => {
   const [selectedUserId, setSelectedUserId] = useState('');
   const { getRoleColor, getRoleDisplayName } = useRoles();

@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Partner, Product, Customer, Plan } from '../types';
 import { cn } from '@/lib/utils';
 import { DealProduct } from '@/types/dealProduct';
+import { API_ENDPOINTS } from '@/config/api';
 
 interface CustomerFormProps {
   onSuccess: () => void;
@@ -660,7 +661,7 @@ const CustomerForm = ({ onSuccess, onCancel }: CustomerFormProps) => {
                   <div className="grid grid-cols-4 gap-4 col-span-full">
                     <div><Label>Product Category</Label><Select value={selectedOem} onValueChange={v => { setSelectedOem(v); setSelectedProduct(''); setSelectedSku(''); }}><SelectTrigger><SelectValue placeholder="Select Product Category" /></SelectTrigger><SelectContent>{oems.map(oem => <SelectItem key={oem} value={oem}>{oem}</SelectItem>)}</SelectContent></Select></div>
                     <div><Label>Product</Label><Select value={selectedProduct} onValueChange={v => { setSelectedProduct(v); setSelectedSku(''); }} disabled={!selectedOem}><SelectTrigger><SelectValue placeholder="Select Product" /></SelectTrigger><SelectContent>{productsForOem.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select></div>
-                    <div><Label>SKU</Label><Select value={selectedSku} onValueChange={setSelectedSku} disabled={!selectedProduct}><SelectTrigger><SelectValue placeholder="Select SKU" /></SelectTrigger><SelectContent>{skusForProduct.map(sku => <SelectItem key={sku.id} value={sku.id}>{sku.name} - ₹{sku.price}</SelectItem>)}</SelectContent></Select></div>
+                    <div><Label>SKU</Label><Select value={selectedSku} onValueChange={setSelectedSku} disabled={!selectedProduct}><SelectTrigger><SelectValue placeholder="Select SKU" /></SelectTrigger><SelectContent>{skusForProduct.map(sku => <SelectItem key={sku.id} value={sku.id}>{sku.name} - ₹{sku.price}{planType === 'Yearly' ? '/year' : ''}</SelectItem>)}</SelectContent></Select></div>
                     <div><Label htmlFor="license-count">License Count</Label><Input id="license-count" type="number" min="1" value={licenseCount} onChange={e => setLicenseCount(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value, 10)))} placeholder="e.g., 10" /></div>
                   </div>
                   

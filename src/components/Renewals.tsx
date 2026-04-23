@@ -38,12 +38,36 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
-import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
+import { format, parse, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, isValid } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 
 const Renewals = () => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
+
+  const parseRenewalDate = (value?: string | Date | null) => {
+    if (!value) return undefined;
+
+    if (value instanceof Date) {
+      return isValid(value) ? value : undefined;
+    }
+
+    const trimmedValue = String(value).trim();
+    if (!trimmedValue) return undefined;
+
+    const parsedYyyyMmDd = parse(trimmedValue, 'yyyy-MM-dd', new Date());
+    if (isValid(parsedYyyyMmDd)) {
+      return parsedYyyyMmDd;
+    }
+
+    const parsedDdMmYyyy = parse(trimmedValue, 'dd/MM/yyyy', new Date());
+    if (isValid(parsedDdMmYyyy)) {
+      return parsedDdMmYyyy;
+    }
+
+    const parsedDefault = new Date(trimmedValue);
+    return isValid(parsedDefault) ? parsedDefault : undefined;
+  };
 
   // Data states
   const [renewals, setRenewals] = useState<Renewal[]>([]);
@@ -274,15 +298,23 @@ const Renewals = () => {
             });
           }
 
+          const parsedShivaamiRenewalDate = parseRenewalDate(item.shivaami_renewal_date);
+          const parsedGoogleRenewalDate = parseRenewalDate(item.renewal_date);
+          const effectiveRenewalDate = parsedShivaamiRenewalDate || parsedGoogleRenewalDate;
+
+          if (!effectiveRenewalDate) {
+            return;
+          }
+
           // Create Renewal
           renewalsMap.set(renewalId, {
             id: renewalId,
             customerId: item.cust_id,
             partnerId: item.reseller_id,
             productId: item.skuid,
-            renewalDate: new Date(item.shivaami_renewal_date || item.renewal_date), // Keep shivaami_renewal_date as primary for logic
-            googleRenewalDate: item.renewal_date ? new Date(item.renewal_date) : undefined,
-            shivaamiRenewalDate: item.shivaami_renewal_date ? new Date(item.shivaami_renewal_date) : undefined,
+            renewalDate: effectiveRenewalDate, // Keep shivaami_renewal_date as primary for logic
+            googleRenewalDate: parsedGoogleRenewalDate,
+            shivaamiRenewalDate: parsedShivaamiRenewalDate,
             contractValue: parseFloat(item.revenue_amt || item.price || 0),
             status: item.status,
             notificationSent: false,

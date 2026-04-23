@@ -166,7 +166,19 @@ export interface User {
   name: string;
   email: string;
   phone: string;
-  role: 'admin' | 'fsr' | 'team-leader' | 'manager' | 'assistant-manager' | 'bde';
+  role: 'admin' | 'fsr' | 'team-leader' | 'manager' | 'assistant-manager' | 'bde' | 'isr';
+  reportingTo?: string; // ID of the user they report to
+  department: string;
+  status: 'active' | 'inactive';
+  createdAt: Date;
+  lastLogin?: Date;
+}
+export interface AssignedUser {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: 'admin' | 'fsr' | 'team-leader' | 'manager' | 'assistant-manager' | 'bde' | 'isr';
   reportingTo?: string; // ID of the user they report to
   department: string;
   status: 'active' | 'inactive';

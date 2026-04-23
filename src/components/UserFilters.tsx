@@ -10,7 +10,7 @@ interface UserFiltersProps {
 }
 
 const UserFilters = ({ onRoleFilter, onStatusFilter, onDepartmentFilter }: UserFiltersProps) => {
-  const roles = ['admin', 'manager', 'assistant-manager', 'team-leader', 'fsr', 'bde'];
+  const roles = ['admin', 'manager', 'assistant-manager', 'team-leader', 'fsr', 'bde','isr'];
   const departments = ['Administration', 'Sales', 'Field Sales', 'Business Development', 'Marketing', 'Operations'];
 
   const getRoleDisplayName = (role: string) => {

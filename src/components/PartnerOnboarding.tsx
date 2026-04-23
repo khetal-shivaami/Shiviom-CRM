@@ -9,11 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { Search, UserPlus, Filter, CheckCircle, Clock, AlertCircle, Eye, Users, FileText, Handshake, Shield, PenTool, Trophy, Link, KeyRound, X, Edit, Calendar as CalendarIcon, RotateCcw, ChevronsUpDown, Loader2, History, Share2, Globe, Download } from 'lucide-react';
+import { Search, UserPlus, Filter, CheckCircle, Clock, AlertCircle, Eye, Users, FileText, Handshake, Shield, PenTool, Trophy, Link, KeyRound, X, Edit, Calendar as CalendarIcon, RotateCcw, ChevronsUpDown, Loader2, History, Share2, Globe, Download, UserCheck } from 'lucide-react';
 import { DateRange, DayPicker } from 'react-day-picker';
-import { Partner, User, OnboardingStage, PartnerOnboardingData } from '@/types';
+import { Partner, User, OnboardingStage, PartnerOnboardingData, AssignedUser } from '@/types';
 import AddPartnerForm from '@/components/AddPartnerForm';
 import PartnerOnboardingDetail from '@/components/PartnerOnboardingDetail';
 import { EditPartnerDialog } from '@/components/EditPartnerDialog';
@@ -26,7 +26,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/config/api';
 import { cn } from '@/lib/utils';
 import { AddPartnerDomainDialog } from './AddPartnerDomainDialog';
-import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
+import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfDay, endOfDay } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -34,8 +34,168 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+
+const identityOptions = [
+  { id: 'web-app-developer', label: 'Web App Developer' },
+  { id: 'system-integrator', label: 'System Integrator' },
+  { id: 'managed-service-provider', label: 'Managed Service Provider' },
+  { id: 'digital-marketer', label: 'Digital Marketer' },
+  { id: 'cyber-security', label: 'Cyber Security' },
+  { id: 'cloud-hosting', label: 'Cloud Hosting' },
+  { id: 'web-hosting', label: 'Web Hosting' },
+  { id: 'hardware', label: 'Hardware' },
+  { id: 'cloud-service-provider', label: 'Cloud Service Provider' },
+  { id: 'microsoft-partner', label: 'Microsoft Partner' },
+  { id: 'aws-partner', label: 'AWS Partner' },
+  { id: 'it-consulting', label: 'IT Consulting' },
+  { id: 'freelance', label: 'Freelance' },
+  { id: 'software-reseller', label: 'Software Reseller' },
+  { id: 'marketing', label: 'Marketing' },
+  { id: 'other', label: 'Other' },
+  { value: 'food-beverages-manufacturing', label: 'Food & Beverages Manufacturing' },
+  { value: 'food-beverages-retail', label: 'Food & Beverages Retail' },
+  { value: 'hospital-healthcare', label: 'Hospital & Healthcare' },
+  { value: 'financial-services', label: 'Financial Services' },
+  { value: 'business-professional-services', label: 'Business & Professional Services' },
+  { value: 'construction', label: 'Construction' },
+  { value: 'gaming', label: 'Gaming' },
+  { value: 'logistics', label: 'Logistics' },
+  { value: 'retail-consumer', label: 'Retail & Consumer' },
+  { value: 'advertising', label: 'Advertising' },
+  { value: 'hospitality', label: 'Hospitality' },
+  { value: 'solar', label: 'Solar' },
+  { value: 'fmcg', label: 'FMCG' },
+  { value: 'e-commerce', label: 'E - commerce' },
+  { value: 'wholesale-building-materials', label: 'Wholesale Building Materials' },
+  { value: 'media', label: 'Media' },
+  { value: 'real-estate', label: 'Real Estate' },
+  { value: 'it', label: 'IT' },
+  { value: 'pharmaceutical', label: 'Pharmaceutical' },
+  { value: 'manufacturing', label: 'Manufacturing' },
+  { value: 'fintech', label: 'Fintech' },
+  { value: 'startup', label: 'Startup' },
+  { value: 'automobile-industry', label: 'Automobile industry' },
+  { value: 'transportation', label: 'Transportation' },
+  { value: 'import-export', label: 'Import & Export' },
+  { value: 'software-services', label: 'Software & services' },
+  { value: 'digital-industries', label: 'Digital Industries' },
+  { value: 'bpo', label: 'BPO' },
+  { value: 'kpo', label: 'KPO' },
+] as const;
+
+
+const cityOptions = [
+  { value: 'mumbai', label: 'Mumbai' },
+  { value: 'delhi', label: 'Delhi' },
+  { value: 'bangalore', label: 'Bangalore' },
+  { value: 'hyderabad', label: 'Hyderabad' },
+  { value: 'ahmedabad', label: 'Ahmedabad' },
+  { value: 'chennai', label: 'Chennai' },
+  { value: 'kolkata', label: 'Kolkata' },
+  { value: 'surat', label: 'Surat' },
+  { value: 'pune', label: 'Pune' },
+  { value: 'jaipur', label: 'Jaipur' },
+  { value: 'lucknow', label: 'Lucknow' },
+  { value: 'kanpur', label: 'Kanpur' },
+  { value: 'nagpur', label: 'Nagpur' },
+  { value: 'indore', label: 'Indore' },
+  { value: 'thane', label: 'Thane' },
+  { value: 'bhopal', label: 'Bhopal' },
+  { value: 'visakhapatnam', label: 'Visakhapatnam' },
+  { value: 'pimpri-chinchwad', label: 'Pimpri-Chinchwad' },
+  { value: 'patna', label: 'Patna' },
+  { value: 'vadodara', label: 'Vadodara' },
+  { value: 'ghaziabad', label: 'Ghaziabad' },
+  { value: 'ludhiana', label: 'Ludhiana' },
+  { value: 'agra', label: 'Agra' },
+  { value: 'nashik', label: 'Nashik' },
+  { value: 'faridabad', label: 'Faridabad' },
+  { value: 'meerut', label: 'Meerut' },
+  { value: 'rajkot', label: 'Rajkot' },
+  { value: 'kalyan-dombivali', label: 'Kalyan-Dombivali' },
+  { value: 'vasai-virar', label: 'Vasai-Virar' },
+  { value: 'varanasi', label: 'Varanasi' },
+  { value: 'srinagar', label: 'Srinagar' },
+  { value: 'aurangabad', label: 'Aurangabad' },
+  { value: 'dhanbad', label: 'Dhanbad' },
+  { value: 'amritsar', label: 'Amritsar' },
+  { value: 'navi-mumbai', label: 'Navi Mumbai' },
+  { value: 'prayagraj', label: 'Prayagraj (Allahabad)' },
+  { value: 'ranchi', label: 'Ranchi' },
+  { value: 'howrah', label: 'Howrah' },
+  { value: 'coimbatore', label: 'Coimbatore' },
+  { value: 'jabalpur', label: 'Jabalpur' },
+  { value: 'gwalior', label: 'Gwalior' },
+  { value: 'vijayawada', label: 'Vijayawada' },
+  { value: 'jodhpur', label: 'Jodhpur' },
+  { value: 'madurai', label: 'Madurai' },
+  { value: 'raipur', label: 'Raipur' },
+  { value: 'kota', label: 'Kota' },
+  { value: 'guwahati', label: 'Guwahati' },
+  { value: 'chandigarh', label: 'Chandigarh' },
+  { value: 'solapur', label: 'Solapur' },
+  { value: 'hubli-dharwad', label: 'Hubli-Dharwad' },
+  { value: 'bareilly', label: 'Bareilly' },
+  { value: 'moradabad', label: 'Moradabad' },
+  { value: 'mysore', label: 'Mysore' },
+  { value: 'gurgaon', label: 'Gurgaon' },
+  { value: 'aligarh', label: 'Aligarh' },
+  { value: 'jalandhar', label: 'Jalandhar' },
+  { value: 'tiruchirappalli', label: 'Tiruchirappalli' },
+  { value: 'bhubaneswar', label: 'Bhubaneswar' },
+  { value: 'salem', label: 'Salem' },
+  { value: 'mira-bhayandar', label: 'Mira-Bhayandar' },
+  { value: 'thiruvananthapuram', label: 'Thiruvananthapuram' },
+  { value: 'bhiwandi', label: 'Bhiwandi' },
+  { value: 'saharanpur', label: 'Saharanpur' },
+  { value: 'gorakhpur', label: 'Gorakhpur' },
+  { value: 'guntur', label: 'Guntur' },
+  { value: 'bikaner', label: 'Bikaner' },
+  { value: 'amravati', label: 'Amravati' },
+  { value: 'noida', label: 'Noida' },
+  { value: 'jamshedpur', label: 'Jamshedpur' },
+  { value: 'bhilai', label: 'Bhilai' },
+  { value: 'warangal', label: 'Warangal' },
+  { value: 'cuttack', label: 'Cuttack' },
+  { value: 'firozabad', label: 'Firozabad' },
+  { value: 'kochi', label: 'Kochi' },
+  { value: 'bhavnagar', label: 'Bhavnagar' },
+  { value: 'dehradun', label: 'Dehradun' },
+  { value: 'durgapur', label: 'Durgapur' },
+  { value: 'asansol', label: 'Asansol' },
+  { value: 'nanded', label: 'Nanded' },
+  { value: 'kolhapur', label: 'Kolhapur' },
+  { value: 'ajmer', label: 'Ajmer' },
+  { value: 'gulbarga', label: 'Gulbarga' },
+  { value: 'jamnagar', label: 'Jamnagar' },
+  { value: 'ujjain', label: 'Ujjain' },
+  { value: 'loni', label: 'Loni' },
+  { value: 'siliguri', label: 'Siliguri' },
+  { value: 'jhansi', label: 'Jhansi' },
+  { value: 'ulhasnagar', label: 'Ulhasnagar' },
+  { value: 'nellore', label: 'Nellore' },
+  { value: 'jammu', label: 'Jammu' },
+  { value: 'sangli-miraj-kupwad', label: 'Sangli-Miraj & Kupwad' },
+  { value: 'belgaum', label: 'Belgaum' },
+  { value: 'mangaluru', label: 'Mangaluru' },
+  { value: 'ambattur', label: 'Ambattur' },
+  { value: 'tirunelveli', label: 'Tirunelveli' },
+  { value: 'malegaon', label: 'Malegaon' },
+  { value: 'gaya', label: 'Gaya' },
+  { value: 'jalgaon', label: 'Jalgaon' },
+  { value: 'udaipur', label: 'Udaipur' },
+  { value: 'maheshtala', label: 'Maheshtala' },
+  { value: 'tiruppur', label: 'Tiruppur' },
+  { value: 'other', label: 'Other' }
+] as const;
 
 interface PartnerOnboardingProps {
   users: User[];
@@ -54,23 +214,42 @@ interface InvitationHistoryItem {
 interface EnhancedPartner extends Partner {
   feedback_status: string;
   onboarding: PartnerOnboardingData;
+  city?: string;
+  vertical?: string;
+  assigned_manager?: string;
+  assigned_user_id?: string;
 }
 
 const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps) => {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
+  const [assignableUsers, setAssignableUsers] = useState<AssignedUser[]>([]);
   const [ownerFilter, setOwnerFilter] = useState('all');
+  const [assignedManagerFilter, setAssignedManagerFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [specializationFilter, setSpecializationFilter] = useState('all');
+  const [partnerProgramFilter, setPartnerProgramFilter] = useState('all');
+  const [paymentTermsFilter, setPaymentTermsFilter] = useState('all');
+  const [partnerTypeFilter, setPartnerTypeFilter] = useState('all');
+  const [sourceOfPartnerFilter, setSourceOfPartnerFilter] = useState('all');
+  const [cityFilter, setCityFilter] = useState('all');
+  const [verticalFilter, setVerticalFilter] = useState('all');
+  const [partnerIdentityFilter, setPartnerIdentityFilter] = useState('all');
+  const [zoneFilter, setZoneFilter] = useState('all');
+  const [partnerTagsFilter, setPartnerTagsFilter] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [presetDateRange, setPresetDateRange] = useState('all');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
   const [editingPartner, setEditingPartner] = useState<EnhancedPartner | null>(null);
   const [partnersData, setPartnersData] = useState<EnhancedPartner[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedPartners, setSelectedPartners] = useState<string[]>([]);
+  const [isBulkAssignDialogOpen, setIsBulkAssignDialogOpen] = useState(false);
   const recordsPerPage = 20;
   const [isShareAccessOpen, setIsShareAccessOpen] = useState(false);
   const [sharePartnerPopoverOpen, setSharePartnerPopoverOpen] = useState(false);
@@ -91,6 +270,48 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   });
   const { getOnboardingTasks } = useTaskManager();
 
+  const loggedInUserName = [profile?.first_name, profile?.last_name]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  useEffect(() => {
+    const fetchAssignableUsers = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('user_id, first_name, last_name, role, email, phone, department, status, created_at')
+        .in('role', ['isr', 'fsr', 'bde', 'team-leader']);
+      console.log(data);
+      if (error) {
+        console.error('Error fetching assignable users:', error);
+        toast({
+          title: 'Error',
+          description: 'Could not fetch users for assignment.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const transformedUsers: AssignedUser[] = (data ?? [])
+        .map((p: any) => ({
+          id: p.user_id,
+          name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email || 'Unnamed User',
+          email: p.email || '',
+          role: p.role || '',
+          phone: p.phone || '',
+          department: p.department || '',
+          status: p.status || '',
+          createdAt: p.created_at ? new Date(p.created_at) : new Date(),
+        }));
+
+      setAssignableUsers(transformedUsers);
+    };
+
+    fetchAssignableUsers();
+  }, [toast]);
+
+  const isSalesUser = profile?.role && ['isr', 'fsr', 'bde'].includes(profile.role.toLowerCase());
+
   const stageConfig = {
     'outreach': { title: 'Outreach', icon: Users, color: 'bg-blue-500' },
     'product-overview': { title: 'Product Overview', icon: FileText, color: 'bg-purple-500' },
@@ -104,15 +325,15 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   // Generate mock onboarding data with 7-stage system
   const generateMockOnboardingData = (partner: Partner, dbStage?: OnboardingStage): PartnerOnboardingData => {
     const stages: OnboardingStage[] = ['outreach', 'product-overview', 'partner-program', 'portal-activation', 'agreement', 'kyc', 'onboarded']; // Corrected order
-    
+
     // Use the database stage if provided and valid, otherwise pick a random one as a fallback.
-    const currentStage = dbStage && stages.includes(dbStage) 
-      ? dbStage 
+    const currentStage = dbStage && stages.includes(dbStage)
+      ? dbStage
       : stages[Math.floor(Math.random() * stages.length)];
 
     const currentStageIndex = stages.indexOf(currentStage);
-      const progress = Math.round(((currentStageIndex + 1) / stages.length) * 100);
-    
+    const progress = Math.round(((currentStageIndex + 1) / stages.length) * 100);
+
     return {
       currentStage,
       overallProgress: progress,
@@ -125,8 +346,8 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           stage,
           {
             stage,
-            status: index < currentStageIndex ? 'completed' : 
-                   index === currentStageIndex ? (Math.random() > 0.3 ? 'in-progress' : 'blocked') : 'pending',
+            status: index < currentStageIndex ? 'completed' :
+              index === currentStageIndex ? (Math.random() > 0.3 ? 'in-progress' : 'blocked') : 'pending',
             startedAt: index <= currentStageIndex ? new Date(Date.now() - (stages.length - index) * 3 * 24 * 60 * 60 * 1000) : undefined,
             completedAt: index < currentStageIndex ? new Date(Date.now() - (stages.length - index - 1) * 3 * 24 * 60 * 60 * 1000) : undefined,
             assignedTo: ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson'][Math.floor(Math.random() * 4)],
@@ -170,45 +391,45 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
 
   const handleBulkImport = async (importedData: any[]) => {
     if (!importedData || importedData.length === 0) {
-        toast({ title: "No Data", description: "No data to import.", variant: "destructive" });
-        return;
+      toast({ title: "No Data", description: "No data to import.", variant: "destructive" });
+      return;
     }
 
     try {
-        const partnersToInsert = importedData.map(p => ({
-            name: p.name,
-            email: p.email,
-            company: p.company,
-            contact_number: p.phone,
-            specialization: p.specialization,
-            identity: p.identity && p.identity.length > 0 ? JSON.stringify(p.identity) : null,
-            status: p.status || 'active',
-            agreement_signed: p.agreementSigned,
-            product_types: p.productTypes && p.productTypes.length > 0 ? JSON.stringify(p.productTypes) : null,
-            payment_terms: p.paymentTerms,
-            zone: p.zone && p.zone.length > 0 ? JSON.stringify(p.zone) : null,
-            partner_tag: p.partner_tag && p.partner_tag.length > 0 ? JSON.stringify(p.partner_tag) : null,
-            onboarding_stage: 'outreach', // Default for new partners in onboarding
-        }));
+      const partnersToInsert = importedData.map(p => ({
+        name: p.name,
+        email: p.email,
+        company: p.company,
+        contact_number: p.phone,
+        specialization: p.specialization,
+        identity: p.identity && p.identity.length > 0 ? JSON.stringify(p.identity) : null,
+        status: p.status || 'active',
+        agreement_signed: p.agreementSigned,
+        product_types: p.productTypes && p.productTypes.length > 0 ? JSON.stringify(p.productTypes) : null,
+        payment_terms: p.paymentTerms,
+        zone: p.zone && p.zone.length > 0 ? JSON.stringify(p.zone) : null,
+        partner_tag: p.partner_tag && p.partner_tag.length > 0 ? JSON.stringify(p.partner_tag) : null,
+        onboarding_stage: 'outreach', // Default for new partners in onboarding
+      }));
 
-        const { error } = await supabase.from('partners').insert(partnersToInsert as any);
+      const { error } = await supabase.from('partners').insert(partnersToInsert as any);
 
-        if (error) {
-            throw error;
-        }
+      if (error) {
+        throw error;
+      }
 
-        toast({
-            title: "Import Successful",
-            description: `${importedData.length} partners have been imported successfully.`,
-        });
+      toast({
+        title: "Import Successful",
+        description: `${importedData.length} partners have been imported successfully.`,
+      });
 
-        fetchPartners(); // Refresh the partner list
+      fetchPartners(); // Refresh the partner list
     } catch (error: any) {
-        toast({
-            title: "Import Failed",
-            description: error.message || "An error occurred during the bulk import.",
-            variant: "destructive",
-        });
+      toast({
+        title: "Import Failed",
+        description: error.message || "An error occurred during the bulk import.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -301,12 +522,17 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
         const from = page * CHUNK_SIZE;
         const to = from + CHUNK_SIZE - 1;
 
-        const { data, error } = await supabase
+        let query = supabase
           .from('partners')
           .select('*')
           .order('created_at', { ascending: false })
           .range(from, to);
 
+        if (isSalesUser && loggedInUserName) {
+          query = query.eq('assigned_manager', loggedInUserName);
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
 
         if (data) {
@@ -329,7 +555,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           email: p.email,
           company: p.company,
           phone: p.contact_number,
-          specialization: p.specialization,          
+          specialization: p.specialization,
           identity: parseJsonSafe(p.identity) as any,
           status: p.status,
           agreementSigned: p.agreement_signed,
@@ -352,6 +578,8 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           feedback: p.feedback,
           city: p.city,
           vertical: p.vertical,
+          assigned_manager: p.assigned_manager,
+          assigned_user_id: p.assigned_user_id,
 
         };
 
@@ -371,14 +599,71 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     fetchPartners();
   }, []);
 
+  const getUniqueFilterOptions = (values: Array<string | string[] | null | undefined>) => {
+    return Array.from(
+      new Set(
+        values
+          .flatMap((value) => Array.isArray(value) ? value : [value])
+          .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+          .map((value) => value.trim())
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  };
+
+  const specializationOptions = getUniqueFilterOptions(partnersData.map((partner) => partner.specialization));
+  const partnerProgramOptions = getUniqueFilterOptions(
+    partnersData.map((partner) => (partner as any).partner_program ?? (partner as any).partnerProgram)
+  );
+  const paymentTermsOptions = getUniqueFilterOptions(partnersData.map((partner) => partner.paymentTerms));
+  const partnerTypeOptions = getUniqueFilterOptions(
+    partnersData.map((partner) => (partner as any).partner_type ?? (partner as any).partnerType)
+  );
+  const sourceOfPartnerOptions = [
+    { value: 'webinar', label: 'Webinar' },
+    { value: 'event', label: 'Event' },
+    { value: 'referral', label: 'Referral' },
+    { value: 'inbound', label: 'Inbound' },
+    { value: 'outbound', label: 'Outbound' },
+    { value: 'whatsapp-campaign', label: 'Whatsapp Campaign' },
+    { value: 'email-campaign', label: 'Email Campaign' },
+    { value: 'shivaami', label: 'Shivaami' },
+    { value: 'axima', label: 'Axima' },
+    { value: 'management', label: 'Management' },
+  ] as const;
+  // const cityOptions = getUniqueFilterOptions(partnersData.map((partner) => partner.city));
+  const verticalOptions = getUniqueFilterOptions(partnersData.map((partner) => partner.vertical));
+  const zoneOptions = getUniqueFilterOptions(partnersData.map((partner) => partner.zone));
+  const partnerTagsOptions = getUniqueFilterOptions(partnersData.map((partner) => (partner as any).partner_tag));
+  const assignedManagerOptions = getUniqueFilterOptions(partnersData.map((partner) => partner.assigned_manager));
   useEffect(() => {
     // Reset to first page when filters change
     setCurrentPage(1);
-  }, [searchTerm, stageFilter, ownerFilter, statusFilter, dateRange, presetDateRange]);
+  }, [
+    searchTerm,
+    stageFilter,
+    ownerFilter,
+    statusFilter,
+    assignedManagerFilter,
+    specializationFilter,
+    partnerProgramFilter,
+    paymentTermsFilter,
+    partnerTypeFilter,
+    sourceOfPartnerFilter,
+    cityFilter,
+    verticalFilter,
+    partnerIdentityFilter,
+    zoneFilter,
+    partnerTagsFilter,
+    dateRange,
+    presetDateRange
+  ]);
 
   useEffect(() => {
     const now = new Date();
     switch (presetDateRange) {
+      case 'today':
+        setDateRange({ from: startOfDay(now), to: endOfDay(now) });
+        break;
       case 'last-7-days':
         setDateRange({ from: subDays(now, 6), to: now });
         break;
@@ -410,7 +695,18 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     setSearchTerm('');
     setStageFilter('all');
     setOwnerFilter('all');
+    setAssignedManagerFilter('all');
     setStatusFilter('all');
+    setSpecializationFilter('all');
+    setPartnerProgramFilter('all');
+    setPaymentTermsFilter('all');
+    setPartnerTypeFilter('all');
+    setSourceOfPartnerFilter('all');
+    setCityFilter('all');
+    setVerticalFilter('all');
+    setPartnerIdentityFilter('all');
+    setZoneFilter('all');
+    setPartnerTagsFilter('all');
     setPresetDateRange('all'); // This will also clear dateRange via its useEffect
   };
 
@@ -428,32 +724,56 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   const handleExportCsv = async () => {
     try {
       const headers = [
-        'Partner Name',
-        'Company',
-        'Email',
-        'Phone',
-        'Current Stage',
-        'Progress (%)',
-        'Stage Owner',
-        'Status',
-        'Created Date',
-        'Last Activity',
+        'Portal Reseller ID', 'Name', 'Company', 'Email', 'Phone', 'Specialization',
+        'Identity', 'Status', 'Partner Type', 'Partner Program', 'Source of Partner', 'Partner Tags',
+        'Zone', 'City', 'State', 'Vertical', 'Designation', 'Assigned Manager', 'Stage Owner',
+        'Renewal Manager Name', 'Onboarding Stage', 'Onboarding Progress (%)', 'Customers Count',
+        'New Revenue', 'Renewal Revenue', 'Total Value', 'Partner Discount', 'Payment Terms',
+        'Agreement Signed', 'Agreement Date', 'Created At', 'Contacts', 'Interactions', 'Feedback'
       ];
 
-      const csvRows = filteredPartners.map((partner) => [
-        partner.name,
-        partner.company,
-        partner.email,
-        partner.phone || partner.contact_number || '',
-        stageConfig[partner.onboarding.currentStage].title,
-        partner.onboarding.overallProgress,
-        partner.stage_owner
+      const csvRows = filteredPartners.map((partner) => {
+        const stageOwner = partner.stage_owner
           ? (users.find((user) => user.id === partner.stage_owner)?.name || 'Unknown Owner')
-          : 'Unassigned',
-        partner.feedback_status || partner.status || '',
-        partner.createdAt,
-        partner.onboarding.lastActivity,
-      ]);
+          : 'Unassigned';
+
+        return [
+          partner.portal_reseller_id || '',
+          partner.name,
+          partner.company,
+          partner.email,
+          partner.phone || partner.contact_number || '',
+          partner.specialization || '',
+          Array.isArray(partner.identity) ? partner.identity.join('; ') : '',
+          partner.feedback_status || partner.status || '',
+          (partner as any).partner_type || '',
+          (partner as any).partner_program || '',
+          (partner as any).source_of_partner || '',
+          Array.isArray(partner.partner_tag) ? partner.partner_tag.join('; ') : '',
+          Array.isArray(partner.zone) ? partner.zone.join('; ') : '',
+          partner.city || '',
+          partner.state || '',
+          partner.vertical || '',
+          partner.designation || '',
+          partner.assigned_manager || '',
+          stageOwner,
+          partner.renewal_manager_name || '',
+          partner.onboarding?.currentStage || partner.onboarding_stage || '',
+          partner.onboarding?.overallProgress || 0,
+          partner.customersCount || 0,
+          partner.newRevenue || 0,
+          partner.renewalRevenue || 0,
+          partner.totalValue || 0,
+          partner.partner_discount ?? '',
+          partner.paymentTerms || '',
+          partner.agreementSigned ? 'Yes' : 'No',
+          partner.agreementDate ? partner.agreementDate.toLocaleDateString() : '',
+          partner.createdAt ? new Date(partner.createdAt).toLocaleString() : '',
+          typeof partner.contacts === 'object' ? JSON.stringify(partner.contacts) : partner.contacts || '',
+          typeof partner.interactions === 'object' ? JSON.stringify(partner.interactions) : partner.interactions || '',
+          typeof partner.feedback === 'object' ? JSON.stringify(partner.feedback) : partner.feedback || '',
+        ];
+      });
 
       const csvContent = [
         headers.map(escapeCsvValue).join(','),
@@ -465,7 +785,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       const link = document.createElement('a');
       const timestamp = format(new Date(), 'yyyy-MM-dd-HH-mm');
       link.href = downloadUrl;
-      link.setAttribute('download', `partner-onboarding-${timestamp}.csv`);
+      link.setAttribute('download', `all-partners-export-${timestamp}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -515,9 +835,9 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     }
 
     // Optimistically update the UI
-    setPartnersData(prev => 
-      prev.map(p => 
-        p.id === partnerId 
+    setPartnersData(prev =>
+      prev.map(p =>
+        p.id === partnerId
           ? updatedPartner
           : p
       )
@@ -556,7 +876,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       await fetchPartners(); // Reload the partner list
 
     } catch (error: any) {
-       await logCrmAction("Update Partner Onboarding Stage", `Failed to change partner ${updatedPartner.name} stage from ${fromStage} to ${newStage}. Error: ${error.message}`);
+      await logCrmAction("Update Partner Onboarding Stage", `Failed to change partner ${updatedPartner.name} stage from ${fromStage} to ${newStage}. Error: ${error.message}`);
       toast({ title: "Database Update Failed", description: `Could not save stage for ${updatedPartner.name}. ${error.message}`, variant: "destructive" });
       // Optional: Revert UI change by refetching data
       fetchPartners();
@@ -566,6 +886,22 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   const handleAddPartnerSuccess = () => {
     setShowAddForm(false);
     fetchPartners();
+  };
+
+  const handleSelectPartner = (partnerId: string) => {
+    setSelectedPartners(prev =>
+      prev.includes(partnerId)
+        ? prev.filter(id => id !== partnerId)
+        : [...prev, partnerId]
+    );
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedPartners(filteredPartners.map(p => p.id));
+    } else {
+      setSelectedPartners([]);
+    }
   };
 
   const handleEditPartner = (partner: EnhancedPartner) => {
@@ -618,14 +954,15 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     }
 
     const matchesSearch = partner.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         partner.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         partner.company.toLowerCase().includes(searchTerm.toLowerCase());
+      partner.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      partner.company.toLowerCase().includes(searchTerm.toLowerCase());
     // If a status filter is active, don't filter by stage unless a specific stage is also selected.
     const matchesStage = (statusFilter !== 'all' && stageFilter === 'all') || stageFilter === 'all' || partner.onboarding.currentStage === stageFilter;
-    const matchesOwner = ownerFilter === 'all' || 
-                         (ownerFilter === 'all' && statusFilter !== 'all' ? true : false) || // When a status is selected, don't filter by owner unless specified
-                         (ownerFilter === 'unassigned' && !partner.stage_owner) ||
-                         partner.stage_owner === ownerFilter;
+    const matchesOwner = ownerFilter === 'all' ||
+      (ownerFilter === 'all' && statusFilter !== 'all' ? true : false) || // When a status is selected, don't filter by owner unless specified
+      (ownerFilter === 'unassigned' && !partner.stage_owner) ||
+      partner.stage_owner === ownerFilter;
+    const matchesAssignedManager = assignedManagerFilter === 'all' || (partner.assigned_manager || '') === assignedManagerFilter;
 
     let matchesDate = true;
     if (dateRange?.from) {
@@ -633,7 +970,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       const toDate = dateRange.to ? new Date(dateRange.to) : new Date();
       // Set time to end of day for 'to' date to include all records on that day
       toDate.setHours(23, 59, 59, 999);
-      
+
       matchesDate = partnerDate >= dateRange.from && partnerDate <= toDate;
     }
 
@@ -641,8 +978,33 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     const selectedStatus = statusFilter.toLowerCase(); // UI filter value
 
     const matchesStatus = statusFilter === 'all' || partnerFeedbackStatus === selectedStatus;
+    const matchesSpecialization = specializationFilter === 'all' || (partner.specialization || '') === specializationFilter;
+    const matchesPartnerProgram = partnerProgramFilter === 'all' || ((partner as any).partner_program ?? (partner as any).partnerProgram ?? '') === partnerProgramFilter;
+    const matchesPaymentTerms = paymentTermsFilter === 'all' || (partner.paymentTerms || '') === paymentTermsFilter;
+    const matchesPartnerType = partnerTypeFilter === 'all' || (((partner as any).partner_type ?? (partner as any).partnerType ?? '') === partnerTypeFilter);
+    const matchesSourceOfPartner = sourceOfPartnerFilter === 'all' || (((partner as any).source_of_partner ?? (partner as any).sourceOfPartner ?? '') === sourceOfPartnerFilter);
+    const matchesCity = cityFilter === 'all' || (partner.city || '') === cityFilter;
+    const matchesVertical = verticalFilter === 'all' || (partner.vertical || '') === verticalFilter;
+    const matchesPartnerIdentity = partnerIdentityFilter === 'all' || partner.identity?.includes(partnerIdentityFilter);
+    const matchesZone = zoneFilter === 'all' || partner.zone?.includes(zoneFilter);
+    const matchesPartnerTags = partnerTagsFilter === 'all' || ((partner as any).partner_tag?.includes(partnerTagsFilter));
 
-    return matchesSearch && matchesStage && matchesOwner && matchesDate && matchesStatus;
+    return matchesSearch &&
+      matchesStage &&
+      matchesOwner &&
+      matchesAssignedManager &&
+      matchesDate &&
+      matchesStatus &&
+      matchesSpecialization &&
+      matchesPartnerProgram &&
+      matchesPaymentTerms &&
+      matchesPartnerType &&
+      matchesSourceOfPartner &&
+      matchesCity &&
+      matchesVertical &&
+      matchesPartnerIdentity &&
+      matchesZone &&
+      matchesPartnerTags;
   });
 
   // Pagination logic
@@ -656,26 +1018,27 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       <div className="text-sm text-muted-foreground">
         Showing <strong>{filteredPartners.length > 0 ? indexOfFirstRecord + 1 : 0}</strong> to <strong>{Math.min(indexOfLastRecord, filteredPartners.length)}</strong> of <strong>{filteredPartners.length}</strong> partners.
       </div>
+
       <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-          >
-            Previous
-          </Button>
-          <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages > 0 ? totalPages : 1}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages || totalPages === 0}
-          >
-            Next
-          </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+        >
+          Previous
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          Page {currentPage} of {totalPages > 0 ? totalPages : 1}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+          disabled={currentPage === totalPages || totalPages === 0}
+        >
+          Next
+        </Button>
       </div>
     </div>
   );
@@ -722,7 +1085,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       color: 'text-yellow-600',
       icon: Shield
     },
-    
+
     {
       title: 'Onboarded',
       value: partnersData.filter(p => p.onboarding.currentStage === 'onboarded').length,
@@ -731,11 +1094,11 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     }
   ];
 
-  const avgProgress = filteredPartners.length > 0 
+  const avgProgress = filteredPartners.length > 0
     ? Math.round(filteredPartners.reduce((sum, p) => sum + p.onboarding.overallProgress, 0) / filteredPartners.length)
     : 0;
 
-  const partnersForDocs = partnersData.filter(p => 
+  const partnersForDocs = partnersData.filter(p =>
     p.onboarding.currentStage === 'onboarded' || p.onboarding.currentStage === 'kyc'
   );
 
@@ -822,7 +1185,8 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
         },
         body: JSON.stringify({
           reseller_email: partner.email,
-          agreement_name: selectedAgreement
+          agreement_name: selectedAgreement,
+          sender_email: user.email
         }),
       });
 
@@ -880,9 +1244,10 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   }
 
   if (showAddForm) {
+    console.log("users", users)
     return (
       <div className="space-y-6">
-        <AddPartnerForm 
+        <AddPartnerForm
           users={users}
           onSuccess={handleAddPartnerSuccess}
           onCancel={() => setShowAddForm(false)}
@@ -918,6 +1283,12 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
             <Download className="h-4 w-4 mr-2" />
             Export Data
           </Button>
+          {selectedPartners.length > 0 && (
+            <Button onClick={() => setIsBulkAssignDialogOpen(true)}>
+              <UserCheck className="h-4 w-4 mr-2" />
+              Assign User ({selectedPartners.length})
+            </Button>
+          )}
           <Button onClick={() => setShowAddForm(true)}>
             <UserPlus className="h-4 w-4 mr-2" />
             Add Partner
@@ -975,8 +1346,8 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       </div>
 
       <Card>
-        <CardHeader>
-          <div className="flex items-center space-x-4">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -989,124 +1360,309 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
                   onClick={() => setSearchTerm('')}
                 >
                   <X className="h-4 w-4 text-muted-foreground" />
                 </Button>
               )}
             </div>
-            <Select value={stageFilter} onValueChange={setStageFilter}>
-              <SelectTrigger className="w-[200px]">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Filter by Stage" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Stages</SelectItem>
-                <SelectItem value="outreach">Outreach</SelectItem>
-                <SelectItem value="product-overview">Product Overview</SelectItem>
-                <SelectItem value="partner-program">Partner Program</SelectItem>
-                <SelectItem value="portal-activation">Portal Activation</SelectItem>
-                <SelectItem value="agreement">Agreement</SelectItem> 
-                <SelectItem value="kyc">KYC</SelectItem>
-                <SelectItem value="onboarded">Onboarded</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-              <SelectTrigger className="w-[200px]">
-                <Users className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Filter by Owner" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Owners</SelectItem>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-                {users.map(user => (
-                  <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[200px]">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Filter by Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="invalid">Invalid</SelectItem>
-                <SelectItem value="not-interested">Not Interested</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex items-center space-x-2">
-              <Select value={presetDateRange} onValueChange={setPresetDateRange}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Select date range" />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <Select value={stageFilter} onValueChange={setStageFilter}>
+                <SelectTrigger className="w-full">
+                  <Filter className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Filter by Stage" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="last-7-days">Last 7 days</SelectItem>
-                  <SelectItem value="last-30-days">Last 30 days</SelectItem>
-                  <SelectItem value="this-month">This Month</SelectItem>
-                  <SelectItem value="last-month">Last Month</SelectItem>
-                  <SelectItem value="this-year">This Year</SelectItem>
-                  <SelectItem value="custom">Custom Range</SelectItem>
+                  <SelectItem value="all">All Stages</SelectItem>
+                  <SelectItem value="outreach">Outreach</SelectItem>
+                  <SelectItem value="product-overview">Product Overview</SelectItem>
+                  <SelectItem value="partner-program">Partner Program</SelectItem>
+                  <SelectItem value="portal-activation">Portal Activation</SelectItem>
+                  <SelectItem value="agreement">Agreement</SelectItem>
+                  <SelectItem value="kyc">KYC</SelectItem>
+                  <SelectItem value="onboarded">Onboarded</SelectItem>
                 </SelectContent>
               </Select>
-              <Button
-                variant="ghost"
-                onClick={handleResetFilters}
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Reset
-              </Button>
-              {presetDateRange === 'custom' && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="date"
-                      variant={"outline"}
-                      className={cn(
-                        "w-[300px] justify-start text-left font-normal",
-                        !dateRange && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRange?.from ? (
-                        dateRange.to ? (
-                          <>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>
-                        ) : (
-                          format(dateRange.from, "LLL dd, y")
-                        )
-                      ) : (
-                        <span>Pick a date range</span>
-                      )}
+
+              {/* <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                <SelectTrigger className="w-full">
+                  <Users className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Filter by Owner" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Owners</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {users.map(user => (
+                    <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select> */}
+
+              <Select value={assignedManagerFilter} onValueChange={setAssignedManagerFilter}>
+                <SelectTrigger className="w-full">
+                  <Users className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Filter by Assigned Manager" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Assigned Managers</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {assignedManagerOptions.map((manager) => (
+                    <SelectItem key={manager} value={manager}>{manager || 'Unassigned'}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full">
+                  <Filter className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Filter by Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="invalid">Invalid</SelectItem>
+                  <SelectItem value="not-interested">Not Interested</SelectItem>
+                  <SelectItem value="call-back">Call Back</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="followup">Followup</SelectItem>
+                  <SelectItem value="interested">Interested</SelectItem>
+                  <SelectItem value="invalid">Invalid</SelectItem>
+                  <SelectItem value="nc">NC</SelectItem>
+                  <SelectItem value="not-interested">Not Interested</SelectItem>
+                  <SelectItem value="price-challenge">Price challenge</SelectItem>
+                  <SelectItem value="whatsapp">Whatsapp</SelectItem>
+                  <SelectItem value="linkedin">Linkedin</SelectItem>
+                  <SelectItem value="freshfollowup-connected">Fresh Follow-up - Connected</SelectItem>
+                  <SelectItem value="followup-not-connected">Follow-up - Not Connected</SelectItem>
+                  <SelectItem value="qc">QC</SelectItem>
+                  <SelectItem value="qc-pending">QC-Pending</SelectItem>
+                  <SelectItem value="qc-qualified">QC-Qualified</SelectItem>
+                  <SelectItem value="qc-notqualified">QC-NotQualified</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="flex flex-wrap gap-2">
+                <Collapsible open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline">
+                      <Filter className="mr-2 h-4 w-4" />
+                      Advanced Filter
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      initialFocus
-                      mode="range"
-                      defaultMonth={dateRange?.from}
-                      selected={dateRange}
-                      onSelect={setDateRange}
-                      numberOfMonths={2}
-                    />
-                  </PopoverContent>
-                </Popover>
-              )}
+                  </CollapsibleTrigger>
+                </Collapsible>
+                <Button
+                  variant="ghost"
+                  onClick={handleResetFilters}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reset
+                </Button>
+              </div>
             </div>
           </div>
+
+          <Collapsible open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
+            <CollapsibleContent>
+              <div className="grid grid-cols-1 gap-4 pt-2 md:grid-cols-2 xl:grid-cols-4">
+                {/* <Select value={specializationFilter} onValueChange={setSpecializationFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Specialization" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Specialization</SelectItem>
+                    {specializationOptions.map((option) => (
+                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select> */}
+
+                {/* <Select value={partnerProgramFilter} onValueChange={setPartnerProgramFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Partner Program" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Partner Program</SelectItem>
+                    {partnerProgramOptions.map((option) => (
+                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select> */}
+
+                <Select value={paymentTermsFilter} onValueChange={setPaymentTermsFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Payment Terms" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Payment Terms</SelectItem>
+                    {paymentTermsOptions.map((option) => (
+                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={partnerTypeFilter} onValueChange={setPartnerTypeFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Partner Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Partner Type</SelectItem>
+                    {partnerTypeOptions.map((option) => (
+                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={sourceOfPartnerFilter} onValueChange={setSourceOfPartnerFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Source of Partner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Source of Partner</SelectItem>
+                    {sourceOfPartnerOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={cityFilter} onValueChange={setCityFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="City" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All City</SelectItem>
+                    {cityOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* <Select value={verticalFilter} onValueChange={setVerticalFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Vertical" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Vertical</SelectItem>
+                    {verticalOptions.map((option) => (
+                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select> */}
+
+                <Select value={partnerIdentityFilter} onValueChange={setPartnerIdentityFilter} >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Partner Identity" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Partner Identity</SelectItem>
+                    {identityOptions.map((option) => (
+                      <SelectItem key={'id' in option ? option.id : option.value} value={'id' in option ? option.id! : option.value!}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={zoneFilter} onValueChange={setZoneFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Zone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Zone</SelectItem>
+                    {zoneOptions.map((option) => (
+                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={partnerTagsFilter} onValueChange={setPartnerTagsFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Partner Tags" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Partner Tags</SelectItem>
+                    {partnerTagsOptions.map((option) => (
+                      <SelectItem key={option} value={option}>{option}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={presetDateRange} onValueChange={setPresetDateRange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select date range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="last-7-days">Last 7 days</SelectItem>
+                    <SelectItem value="last-30-days">Last 30 days</SelectItem>
+                    <SelectItem value="this-month">This Month</SelectItem>
+                    <SelectItem value="last-month">Last Month</SelectItem>
+                    <SelectItem value="this-year">This Year</SelectItem>
+                    <SelectItem value="custom">Custom Range</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {presetDateRange === 'custom' && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="date"
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !dateRange && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateRange?.from ? (
+                          dateRange.to ? (
+                            <>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>
+                          ) : (
+                            format(dateRange.from, "LLL dd, y")
+                          )
+                        ) : (
+                          <span>Pick a date range</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={dateRange?.from}
+                        selected={dateRange}
+                        onSelect={setDateRange}
+                        numberOfMonths={2}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </CardHeader>
         <CardContent>
           <div className="pb-4">
             {paginationControls}
+            <p className="text-red-500 text-center text-bold">
+              Note :- Non Highlighted records represents the unattempted data.
+            </p>
           </div>
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>
+                  <Checkbox
+                    checked={filteredPartners.length > 0 && selectedPartners.length === filteredPartners.length}
+                    onCheckedChange={(checked) => handleSelectAll(checked as boolean)}
+                    disabled={filteredPartners.length === 0}
+                  />
+                </TableHead>
                 <TableHead>Partner</TableHead>
                 <TableHead>Current Stage</TableHead>
-                <TableHead>Progress</TableHead>                
+                <TableHead>Progress</TableHead>
                 <TableHead>Stage Owner</TableHead>
                 <TableHead>Created Date</TableHead>
                 <TableHead>Last Activity</TableHead>
@@ -1116,95 +1672,105 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
+                  <TableCell colSpan={8} className="h-24 text-center">
                     Loading partners...
                   </TableCell>
                 </TableRow>
               ) : currentRecords.map((partner) => {
-                  const currentStageData = partner.onboarding.stages[partner.onboarding.currentStage];
-                  const stageConfig = {
-                    'outreach': { title: 'Outreach', icon: Users },
-                    'product-overview': { title: 'Product Overview', icon: FileText },
-                    'partner-program': { title: 'Partner Program', icon: Handshake },
-                    'portal-activation': { title: 'Portal Activation', icon: KeyRound },
-                    'agreement': { title: 'Agreement', icon: PenTool },
-                    'kyc': { title: 'KYC', icon: Shield },
-                    'onboarded': { title: 'Onboarded', icon: Trophy }
-                  };
-                  
-                  return (
-                    <TableRow 
-                      key={partner.id} 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setSelectedPartner(partner)}
-                    >
-                      <TableCell>
+                const currentStageData = partner.onboarding.stages[partner.onboarding.currentStage];
+                const stageConfig = {
+                  'outreach': { title: 'Outreach', icon: Users },
+                  'product-overview': { title: 'Product Overview', icon: FileText },
+                  'partner-program': { title: 'Partner Program', icon: Handshake },
+                  'portal-activation': { title: 'Portal Activation', icon: KeyRound },
+                  'agreement': { title: 'Agreement', icon: PenTool },
+                  'kyc': { title: 'KYC', icon: Shield },
+                  'onboarded': { title: 'Onboarded', icon: Trophy }
+                };
+                const hasContacts = parseJsonSafe(partner.contacts).length > 0;
+                const hasInteractions = parseInteractionsSafe(partner.interactions).length > 0;
+
+                return (
+                  <TableRow
+                    key={partner.id}
+                    className={cn(
+                      "cursor-pointer hover:bg-muted/50",
+                      (hasContacts || hasInteractions) && "bg-blue-50 hover:bg-blue-100/80"
+                    )}
+                    onClick={() => setSelectedPartner(partner)}
+                  >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedPartners.includes(partner.id)}
+                        onCheckedChange={() => handleSelectPartner(partner.id)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{partner.name}</div>
+                        <div className="text-sm text-muted-foreground">{partner.company}</div>
+                        <div className="text-xs text-muted-foreground">{partner.email}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        {getStageIcon(partner.onboarding.currentStage)}
                         <div>
-                          <div className="font-medium">{partner.name}</div>
-                          <div className="text-sm text-muted-foreground">{partner.company}</div>
-                          <div className="text-xs text-muted-foreground">{partner.email}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          {getStageIcon(partner.onboarding.currentStage)}
-                          <div>
-                            <div className="font-medium text-sm">
-                              {stageConfig[partner.onboarding.currentStage].title}
-                            </div>
-                            {/* <Badge 
+                          <div className="font-medium text-sm">
+                            {stageConfig[partner.onboarding.currentStage].title}
+                          </div>
+                          {/* <Badge 
                               variant="outline" 
                               className={`text-xs ${getStatusColor(currentStageData.status)} text-white border-0`}
                             >
                               {currentStageData.status.replace('-', ' ')}
                             </Badge> */}
-                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="text-sm font-medium">{partner.onboarding.overallProgress}%</div>
-                          <Progress value={partner.onboarding.overallProgress} className="w-16 h-2" />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {partner.stage_owner 
-                            ? (users.find(u => u.id === partner.stage_owner)?.name || 'Unknown Owner') 
-                            : 'Unassigned'
-                          }
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {partner.createdAt.toLocaleDateString()}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {partner.onboarding.lastActivity.toLocaleDateString()}
-                        </div>
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center space-x-2">
-                          <PartnerStageEditForm partner={partner} onUpdate={handlePartnerUpdate} />
-                          {/* <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditPartner(partner)}
-                            title="Edit Partner Details"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button> */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditPartner(partner)}
-                            title="Edit Partner Details"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          {/* <Button 
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium">{partner.onboarding.overallProgress}%</div>
+                        <Progress value={partner.onboarding.overallProgress} className="w-16 h-2" />
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {partner.stage_owner
+                          ? (users.find(u => u.id === partner.stage_owner)?.name || 'Unknown Owner')
+                          : 'Unassigned'
+                        }
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {partner.createdAt.toLocaleDateString()}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {partner.onboarding.lastActivity.toLocaleDateString()}
+                      </div>
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center space-x-2">
+                        <PartnerStageEditForm partner={partner} onUpdate={handlePartnerUpdate} />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditPartner(partner)}
+                          title="Edit Partner Details"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        {profile?.role && ['team-leader', 'admin', 'manager'].includes(profile.role) && (
+                          <AssignUserDialog partner={partner} assigeeUsers={assignableUsers} onSuccess={fetchPartners}>
+                            <Button variant="ghost" size="sm" title="Assign User">
+                              <UserCheck className="h-4 w-4" />
+                            </Button>
+                          </AssignUserDialog>
+                        )}
+                        {/* <Button 
                             variant="ghost" 
                             size="sm"
                             onClick={() => {
@@ -1216,11 +1782,11 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                           >
                             <Link className="h-4 w-4" />
                           </Button> */}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
           <div className="pt-4">
@@ -1228,11 +1794,21 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           </div>
         </CardContent>
       </Card>
-         <AddPartnerDomainDialog
+      <AddPartnerDomainDialog
         open={isAddDomainModalOpen}
         onOpenChange={setIsAddDomainModalOpen}
-      />       
+      />
       <Dialog open={isShareAccessOpen} onOpenChange={setIsShareAccessOpen}>
+        <BulkAssignUserDialog
+          isOpen={isBulkAssignDialogOpen}
+          onOpenChange={setIsBulkAssignDialogOpen}
+          partnerIds={selectedPartners}
+          users={assignableUsers}
+          onSuccess={() => {
+            fetchPartners();
+            setSelectedPartners([]);
+          }}
+        />
         <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>Share Portal Access</DialogTitle>
@@ -1315,32 +1891,32 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                 <TableBody>
                   {isHistoryLoading ? (
                     <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="inline-block mr-2 h-4 w-4 animate-spin" />Loading history...</TableCell></TableRow>
-                  ) : invitationHistory.filter(item => 
-                      (item.reseller_name || '').toLowerCase().includes(historySearchTerm.toLowerCase()) ||
-                      (item.reseller_email || '').toLowerCase().includes(historySearchTerm.toLowerCase())
-                    ).length > 0 ? (
+                  ) : invitationHistory.filter(item =>
+                    (item.reseller_name || '').toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+                    (item.reseller_email || '').toLowerCase().includes(historySearchTerm.toLowerCase())
+                  ).length > 0 ? (
                     invitationHistory
-                      .filter(item => 
+                      .filter(item =>
                         (item.reseller_name || '').toLowerCase().includes(historySearchTerm.toLowerCase()) ||
                         (item.reseller_email || '').toLowerCase().includes(historySearchTerm.toLowerCase())
                       )
                       .map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>{item.reseller_name || 'N/A'}</TableCell>
-                        <TableCell>{item.reseller_email || 'N/A'}</TableCell>
-                        <TableCell>
-                          <Badge className={cn(
-                            "border-transparent",
-                            item.agreement_doc_status === 'Yes' 
-                              ? 'bg-green-100 text-green-800 hover:bg-green-100/80' 
-                              : 'bg-red-100 text-red-800 hover:bg-red-100/80'
-                          )}>
-                            {item.agreement_doc_status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{new Date(item.invitation_date).toLocaleDateString()}</TableCell>
-                      </TableRow>
-                    ))
+                        <TableRow key={item.id}>
+                          <TableCell>{item.reseller_name || 'N/A'}</TableCell>
+                          <TableCell>{item.reseller_email || 'N/A'}</TableCell>
+                          <TableCell>
+                            <Badge className={cn(
+                              "border-transparent",
+                              item.agreement_doc_status === 'Yes'
+                                ? 'bg-green-100 text-green-800 hover:bg-green-100/80'
+                                : 'bg-red-100 text-red-800 hover:bg-red-100/80'
+                            )}>
+                              {item.agreement_doc_status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{new Date(item.invitation_date).toLocaleDateString()}</TableCell>
+                        </TableRow>
+                      ))
                   ) : (
                     <TableRow><TableCell colSpan={4} className="text-center h-24 text-muted-foreground">No invitation history found.</TableCell></TableRow>
                   )}
@@ -1408,7 +1984,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                 </Command>
               </PopoverContent>
             </Popover>
-            
+
             <div className="grid gap-4 pt-4">
               <h4 className="text-sm font-medium">Select documents to share:</h4>
               <div className="flex items-center space-x-2">
@@ -1461,6 +2037,208 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
         </DialogContent>
       </Dialog>
     </div>
+  );
+};
+
+interface BulkAssignUserDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  partnerIds: string[];
+  users: AssignedUser[];
+  onSuccess: () => void;
+}
+
+const BulkAssignUserDialog = ({ isOpen, onOpenChange, partnerIds, users, onSuccess }: BulkAssignUserDialogProps) => {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+
+  const handleSubmit = async () => {
+    if (!selectedUserId) {
+      toast({ title: "No user selected", variant: "destructive" });
+      return;
+    }
+    const selectedUser = users.find(u => u.id === selectedUserId);
+    if (!selectedUser) {
+      toast({ title: "Invalid user", variant: "destructive" });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('partners')
+        .update({ assigned_manager: selectedUser.name })
+        .in('id', partnerIds);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `${partnerIds.length} partners assigned to ${selectedUser.name}.`,
+      });
+      onSuccess();
+      onOpenChange(false);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to assign user: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Bulk Assign User</DialogTitle>
+          <DialogDescription>
+            Assign a user to {partnerIds.length} selected partners.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="user-select">Assignee</Label>
+            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+              <SelectTrigger id="user-select">
+                <SelectValue placeholder="Select a user" />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map(user => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.name} - {user.role.toUpperCase()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button type="submit" onClick={handleSubmit} disabled={isSubmitting || !selectedUserId}>
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserCheck className="mr-2 h-4 w-4" />}
+            {isSubmitting ? 'Assigning...' : 'Assign User'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+interface AssignUserDialogProps {
+  partner: EnhancedPartner;
+  assigeeUsers: AssignedUser[];
+  onSuccess: () => void;
+  children: React.ReactNode;
+}
+
+const AssignUserDialog = ({ partner, assigeeUsers, onSuccess, children }: AssignUserDialogProps) => {
+  const { toast } = useToast();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | undefined>(partner.assigned_user_id || '');
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedUserId(partner.assigned_user_id || '');
+    }
+  }, [isOpen, partner.assigned_user_id]);
+
+
+
+  const handleSubmit = async () => {
+    if (!selectedUserId) {
+      toast({
+        title: "No user selected",
+        description: "Please select a user to assign.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const selectedUser = assigeeUsers.find(u => u.id === selectedUserId);
+    if (!selectedUser) {
+      toast({
+        title: "Invalid user",
+        description: "The selected user could not be found.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('partners')
+        .update({
+          // assigned_user_ids: [selectedUser.id],
+          // assigned_user_id: selectedUser.id,
+          assigned_manager: selectedUser.name,
+        })
+        .eq('id', partner.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `${selectedUser.name} has been assigned to ${partner.name}.`,
+      });
+      onSuccess();
+      setIsOpen(false);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: `Failed to assign user: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Assign User to {partner.name}</DialogTitle>
+          <DialogDescription>
+            Select a user to manage this partner.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="user-select">Assignee</Label>
+            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+              <SelectTrigger id="user-select">
+                <SelectValue placeholder="Select a user" />
+              </SelectTrigger>
+              <SelectContent>
+                {assigeeUsers.map(user => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.name} - {user.role.toUpperCase()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setIsOpen(false)} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button type="submit" onClick={handleSubmit} disabled={isSubmitting || !selectedUserId}>
+            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserCheck className="mr-2 h-4 w-4" />}
+            {isSubmitting ? 'Assigning...' : 'Assign User'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

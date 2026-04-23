@@ -24,8 +24,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useFieldArray } from 'react-hook-form';
-import { Badge, Plus, X, Edit } from 'lucide-react';
+import { useFieldArray, Controller } from 'react-hook-form';
+import { Badge, Plus, X, Edit, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import {
   Collapsible,
@@ -43,7 +43,6 @@ interface EditPartnerDialogProps {
   onLogAction?: (actiontype: string, details: string) => Promise<void>;
 }
 
-
 const identityOptions = [
   { id: 'web-app-developer', label: 'Web App Developer' },
   { id: 'system-integrator', label: 'System Integrator' },
@@ -58,7 +57,38 @@ const identityOptions = [
   { id: 'aws-partner', label: 'AWS Partner' },
   { id: 'it-consulting', label: 'IT Consulting' },
   { id: 'freelance', label: 'Freelance' },
+  { id: 'software-reseller', label: 'Software Reseller' },
+  { id: 'marketing', label: 'Marketing' },
   { id: 'other', label: 'Other' },
+  { value: 'food-beverages-manufacturing', label: 'Food & Beverages Manufacturing' },
+  { value: 'food-beverages-retail', label: 'Food & Beverages Retail' },
+  { value: 'hospital-healthcare', label: 'Hospital & Healthcare' },
+  { value: 'financial-services', label: 'Financial Services' },
+  { value: 'business-professional-services', label: 'Business & Professional Services' },
+  { value: 'construction', label: 'Construction' },
+  { value: 'gaming', label: 'Gaming' },
+  { value: 'logistics', label: 'Logistics' },
+  { value: 'retail-consumer', label: 'Retail & Consumer' },
+  { value: 'advertising', label: 'Advertising' },
+  { value: 'hospitality', label: 'Hospitality' },
+  { value: 'solar', label: 'Solar' },
+  { value: 'fmcg', label: 'FMCG' },
+  { value: 'e-commerce', label: 'E - commerce' },
+  { value: 'wholesale-building-materials', label: 'Wholesale Building Materials' },
+  { value: 'media', label: 'Media' },
+  { value: 'real-estate', label: 'Real Estate' },
+  { value: 'it', label: 'IT' },
+  { value: 'pharmaceutical', label: 'Pharmaceutical' },
+  { value: 'manufacturing', label: 'Manufacturing' },
+  { value: 'fintech', label: 'Fintech' },
+  { value: 'startup', label: 'Startup' },
+  { value: 'automobile-industry', label: 'Automobile industry' },
+  { value: 'transportation', label: 'Transportation' },
+  { value: 'import-export', label: 'Import & Export' },
+  { value: 'software-services', label: 'Software & services' },
+  { value: 'digital-industries', label: 'Digital Industries' },
+  { value: 'bpo', label: 'BPO' },
+  { value: 'kpo', label: 'KPO' },
 ] as const;
 
 const zoneOptions = [
@@ -102,12 +132,12 @@ const sourceOfPartnerOptions = [
   { value: 'management', label: 'Management' },
 ] as const;
 
-const interactionStatusOptions = [
-  { value: 'freshfollowup-connected', label: 'Fresh Follow-up - Connected' },
-  { value: 'followup-not-connected', label: 'Follow-up - Not Connected' },
-  { value: 'presentation', label: 'Presentation' },
-  { value: 'feedback', label: 'Feedback' },
-] as const;
+// const interactionStatusOptions = [
+//   { value: 'freshfollowup-connected', label: 'Fresh Follow-up - Connected' },
+//   { value: 'followup-not-connected', label: 'Follow-up - Not Connected' },
+//   { value: 'presentation', label: 'Presentation' },
+//   { value: 'feedback', label: 'Feedback' },
+// ] as const;
 
 const feedbackStatusOptions = [
   { value: 'call-back', label: 'Call Back' },
@@ -120,11 +150,28 @@ const feedbackStatusOptions = [
   { value: 'price-challenge', label: 'Price challenge' },
   { value: 'whatsapp', label: 'Whatsapp' },
   { value: 'linkedin', label: 'Linkedin' },
-  { value: 'presentation-call', label: 'Presentation Call' },
+  { value: 'freshfollowup-connected', label: 'Fresh Follow-up - Connected' },
+  { value: 'followup-not-connected', label: 'Follow-up - Not Connected' },
+  { value: 'qc', label: 'QC' },
+  { value: 'qc-pending', label: 'QC-Pending' },
+  { value: 'qc-qualified', label: 'QC-Qualified' },
+  { value: 'qc-notqualified', label: 'QC-NotQualified' },
 ] as const;
 
+const sourceOfLeadOptions = [
+  { value: 'website', label: 'Website' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'referral', label: 'Referral' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'email', label: 'Email' },
+  { value: 'event', label: 'Event' },
+  { value: 'other', label: 'Other' },
+  { value: 'cold-call', label: 'Cold Call' },
+] as const;
+
+const followupFeedbackStatuses = ['freshfollowup-connected', 'followup-not-connected', 'followup'] as const;
+
 const cityOptions = [
-  // Tier 1
   { value: 'mumbai', label: 'Mumbai' },
   { value: 'delhi', label: 'Delhi' },
   { value: 'bangalore', label: 'Bangalore' },
@@ -135,8 +182,6 @@ const cityOptions = [
   { value: 'surat', label: 'Surat' },
   { value: 'pune', label: 'Pune' },
   { value: 'jaipur', label: 'Jaipur' },
-
-  // Tier 2
   { value: 'lucknow', label: 'Lucknow' },
   { value: 'kanpur', label: 'Kanpur' },
   { value: 'nagpur', label: 'Nagpur' },
@@ -267,16 +312,15 @@ const parseJsonSafe = (value: any): string[] => {
   if (Array.isArray(value)) return value;
   if (typeof value === 'string' && value.trim()) {
     try {
-      // Handles JSON strings like '["value1", "value2"]' or '"value1"'
       const parsed = JSON.parse(value);
       return Array.isArray(parsed) ? parsed : [String(parsed)];
-    } catch (e) {
-      // Fallback for non-JSON strings (e.g., comma-separated "value1,value2" or a single "value1")
+    } catch {
       return value.split(',').map(s => s.trim());
     }
   }
   return [];
 };
+
 const partnerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email'),
@@ -286,7 +330,7 @@ const partnerSchema = z.object({
   identity: z.array(z.string()).optional(),
   zone: z.array(z.string()).optional(),
   paymentTerms: z.string().optional(),
-  assignedUserIds: z.array(z.string()).optional(),
+  assignedUserId: z.string().optional(),
   productTypes: z.array(z.string()).optional(),
   partner_program: z.string().optional(),
   stage_owner: z.string().optional(),
@@ -297,21 +341,23 @@ const partnerSchema = z.object({
   city: z.string().optional(),
   vertical: z.string().optional(),
   contacts: z.array(z.object({
-    contactName: z.string().min(1, 'Contact name is required.'),
+    contactName: z.string().optional().or(z.literal('')),
     contactDesignation: z.string().optional().or(z.literal('')),
     contactNumber: z.string().optional().or(z.literal('')),
     contactEmail: z.string().email('Invalid email address.').optional().or(z.literal('')),
-    contactLinkedinURL: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
+    contactLinkedinURL: z.string().url({ message: 'Invalid URL' }).optional().or(z.literal('')),
   })).optional(),
   interactions: z.array(z.object({
-    isrId: z.string().min(1, 'ISR is required.'),
-    contactPerson: z.string().min(1, 'Contact person is required.'),
+    isrId: z.string().optional().or(z.literal('')),
+    contactPerson: z.string().optional().or(z.literal('')),
+    productName: z.string().optional().or(z.literal('')),
     designation: z.string().optional().or(z.literal('')),
     contactNumber: z.string().optional().or(z.literal('')),
     contactEmail: z.string().email('Invalid email address.').optional().or(z.literal('')),
-    status: z.enum(['freshfollowup-connected', 'followup-not-connected', 'presentation', 'feedback'], {
-      required_error: "Status is required.",
-    }),
+    status: z.enum(['freshfollowup-connected', 'followup-not-connected', 'presentation', 'feedback'])
+      .optional(),
+    source_of_lead: z.string().optional(),
+    followup_date: z.string().optional(),
     feedback_status: z.string().optional(),
     feedback_notes: z.string().optional(),
     feedback_timestamp: z.string().optional(),
@@ -319,41 +365,94 @@ const partnerSchema = z.object({
   feedback_status: z.string().optional(),
   feedback_notes: z.string().optional(),
 });
-
+console.log(partnerSchema)
 type PartnerFormData = z.infer<typeof partnerSchema>;
+
+type ContactFormValue = {
+  contactName: string;
+  contactDesignation: string;
+  contactNumber: string;
+  contactEmail: string;
+  contactLinkedinURL: string;
+};
+
+type InteractionFormValue = {
+  isrId: string;
+  contactPerson: string;
+  productName: string;
+  designation: string;
+  contactNumber: string;
+  contactEmail: string;
+  status: 'freshfollowup-connected' | 'followup-not-connected' | 'presentation' | 'feedback';
+  source_of_lead: string;
+  followup_date: string;
+  feedback_status: string;
+  feedback_notes: string;
+  feedback_timestamp: string;
+};
+
+const normalizeInteractionForStorage = (interaction: InteractionFormValue) => {
+  const legacyProductName = (interaction as InteractionFormValue & { product_name?: string }).product_name;
+  return {
+    ...interaction,
+    productName: interaction.productName || legacyProductName || '',
+    product_name: interaction.productName || legacyProductName || '',
+    designation: interaction.designation || '',
+    source_of_lead: interaction.source_of_lead || '',
+    followup_date: interaction.followup_date || '',
+  };
+};
 
 export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSuccess }: EditPartnerDialogProps) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<Partial<Partner>>({});
+  const currentUser = users.find(u => u.id === user?.id);
+  const isSalesRole = currentUser && ['isr', 'fsr', 'bde'].includes(currentUser.role);
+  const isIsrRole = currentUser?.role === 'isr';
+
   const [feedbackHistory, setFeedbackHistory] = useState<any[]>([]);
+  const [products, setProducts] = useState<Array<{ id: string; name: string }>>([]);
 
   const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null);
-  const [contactData, setContactData] = useState({
+  const [contactData, setContactData] = useState<ContactFormValue>({
     contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '', contactLinkedinURL: '',
   });
   const [isInteractionFormOpen, setIsInteractionFormOpen] = useState(false);
   const [isContactFormOpen, setIsContactFormOpen] = useState(false);
   const [editingInteractionIndex, setEditingInteractionIndex] = useState<number | null>(null);
-  const [interactionData, setInteractionData] = useState({
-    isrId: '', contactPerson: '', status: 'freshfollowup-connected' as const, designation: '', contactNumber: '', contactEmail: '', feedback_status: '', feedback_notes: ''
-  });
-
-  const defaultInteractionValue = {
+  const [interactionData, setInteractionData] = useState<InteractionFormValue>({
     isrId: '',
     contactPerson: '',
+    productName: '',
+    status: 'presentation',
     designation: '',
     contactNumber: '',
     contactEmail: '',
-    status: 'freshfollowup-connected' as const,
+    source_of_lead: '',
+    followup_date: '',
     feedback_status: '',
     feedback_notes: '',
-    feedback_timestamp: '', // Initialize timestamp field
+    feedback_timestamp: '',
+  });
+
+  const defaultInteractionValue: InteractionFormValue = {
+    isrId: '',
+    contactPerson: '',
+    productName: '',
+    designation: '',
+    contactNumber: '',
+    contactEmail: '',
+    status: 'presentation' as const,
+    source_of_lead: '',
+    followup_date: '',
+    feedback_status: '',
+    feedback_notes: '',
+    feedback_timestamp: '',
   };
 
-  const defaultContactValue = {
-    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '', contactLinkedinURL: ''
+  const defaultContactValue: ContactFormValue = {
+    contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '', contactLinkedinURL: '',
   };
 
   const handleAddOrUpdateContact = () => {
@@ -361,7 +460,6 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
       toast({ title: 'Invalid contact email.', variant: 'destructive' });
       return;
     }
-
     if (editingContactIndex !== null) {
       update(editingContactIndex, contactData);
       setEditingContactIndex(null);
@@ -371,18 +469,35 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
     setContactData(defaultContactValue);
     setIsContactFormOpen(false);
   };
+
   const handleAddOrUpdateInteraction = () => {
-    if (!interactionData.isrId || !interactionData.contactPerson) {
-      toast({ title: 'Error', description: 'ISR and Contact Person are required.', variant: 'destructive' });
-      return;
-    }
     if (interactionData.contactEmail && !z.string().email().safeParse(interactionData.contactEmail).success) {
       toast({ title: 'Invalid interaction email.', variant: 'destructive' });
       return;
     }
 
-    const interactionWithTimestamp = { ...interactionData };
-    // Add timestamp only if feedback is being provided
+    const selectedContact = (form.getValues().contacts || []).find(
+      contact => contact.contactName === interactionData.contactPerson
+    );
+
+    const interactionWithTimestamp = normalizeInteractionForStorage({
+      ...interactionData,
+      designation: selectedContact?.contactDesignation || interactionData.designation,
+      contactNumber: selectedContact?.contactNumber || interactionData.contactNumber,
+      contactEmail: selectedContact?.contactEmail || interactionData.contactEmail,
+      followup_date: followupFeedbackStatuses.includes(interactionData.feedback_status as typeof followupFeedbackStatuses[number])
+        ? interactionData.followup_date
+        : '',
+    });
+
+    if (
+      followupFeedbackStatuses.includes(interactionData.feedback_status as typeof followupFeedbackStatuses[number]) &&
+      !interactionWithTimestamp.followup_date
+    ) {
+      toast({ title: 'Error', description: 'Follow-up date is required for selected feedback status.', variant: 'destructive' });
+      return;
+    }
+
     if (interactionData.feedback_status || interactionData.feedback_notes) {
       interactionWithTimestamp.feedback_timestamp = new Date().toISOString();
     }
@@ -391,15 +506,20 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
       interactionFieldArray.update(editingInteractionIndex, interactionWithTimestamp);
       setEditingInteractionIndex(null);
     } else {
-      // Prepend to show the newest interaction at the top of the list.
       interactionFieldArray.prepend(interactionWithTimestamp);
     }
     setInteractionData(defaultInteractionValue);
     setIsInteractionFormOpen(false);
   };
+
+  useEffect(() => {
+    if (isIsrRole && currentUser && isInteractionFormOpen) {
+      setInteractionData(d => ({ ...d, isrId: currentUser.id }));
+    }
+  }, [isIsrRole, currentUser, isInteractionFormOpen]);
+
   const form = useForm<PartnerFormData>({
     resolver: zodResolver(partnerSchema),
-    // We will set default values in the useEffect hook when partner data is available.
     defaultValues: {
       name: '',
       email: '',
@@ -413,118 +533,155 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
 
   const { fields, append, remove, update } = useFieldArray({
     control: form.control,
-    name: "contacts",
+    name: 'contacts',
   });
 
   const interactionFieldArray = useFieldArray({
     control: form.control,
-    name: "interactions",
+    name: 'interactions',
   });
+
   const handleEditContact = (index: number) => {
     const contacts = form.getValues().contacts;
     if (contacts && contacts[index]) {
-        setContactData(contacts[index]);
-        setEditingContactIndex(index);
-        setIsContactFormOpen(true);
+      setContactData({
+        contactName: contacts[index].contactName || '',
+        contactDesignation: contacts[index].contactDesignation || '',
+        contactNumber: contacts[index].contactNumber || '',
+        contactEmail: contacts[index].contactEmail || '',
+        contactLinkedinURL: contacts[index].contactLinkedinURL || '',
+      });
+      setEditingContactIndex(index);
+      setIsContactFormOpen(true);
     }
   };
-  
+
   const handleEditInteraction = (index: number) => {
     const interactions = form.getValues().interactions;
     if (interactions && interactions[index]) {
-      setInteractionData(interactions[index]);
+      setInteractionData({
+        isrId: interactions[index].isrId || '',
+        contactPerson: interactions[index].contactPerson || '',
+        productName: interactions[index].productName || (interactions[index] as any).product_name || '',
+        designation: interactions[index].designation || '',
+        contactNumber: interactions[index].contactNumber || '',
+        contactEmail: interactions[index].contactEmail || '',
+        status: interactions[index].status || 'presentation',
+        source_of_lead: (interactions[index] as any).source_of_lead || '',
+        followup_date: (interactions[index] as any).followup_date || '',
+        feedback_status: interactions[index].feedback_status || '',
+        feedback_notes: interactions[index].feedback_notes || '',
+        feedback_timestamp: interactions[index].feedback_timestamp || '',
+      });
       setIsInteractionFormOpen(true);
       setEditingInteractionIndex(index);
     }
   };
 
   useEffect(() => {
+    const fetchProducts = async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name')
+        .not('portal_prod_id', 'is', null)
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching products:', error);
+        return;
+      }
+
+      setProducts((data || []).filter((item): item is { id: string; name: string } => !!item?.id && !!item?.name));
+    };
+
+    fetchProducts();
+  }, []);
+
+  useEffect(() => {
     if (partner) {
-      const contacts = typeof partner.contacts === 'string'
+      const partnerData = partner as any;
+
+      const contacts = typeof partnerData.contacts === 'string'
         ? (() => {
-            try {
-              return JSON.parse(partner.contacts);
-            } catch (e) { return []; }
-          })()
-        : (Array.isArray(partner.contacts) ? partner.contacts : []);
-      const interactions = typeof partner.interactions === 'string'
+          try {
+            return JSON.parse(partnerData.contacts);
+          } catch {
+            return [];
+          }
+        })()
+        : (Array.isArray(partnerData.contacts) ? partnerData.contacts : []);
+
+      const interactions = typeof partnerData.interactions === 'string'
         ? (() => {
-            try {
-              // It's possible partner.interactions is an empty string or not a valid JSON array.
-              const parsed = partner.interactions ? JSON.parse(partner.interactions) : [];
-              // Ensure each interaction object has a feedback_timestamp, even if empty.
-              const mapped = Array.isArray(parsed) ? parsed.map((item: any) => ({ ...item, feedback_timestamp: item.feedback_timestamp || '' })) : [];
-              // Sort interactions by feedback_timestamp in descending order.
-              mapped.sort((a, b) => {
-                if (!a.feedback_timestamp && !b.feedback_timestamp) return 0;
-                if (!a.feedback_timestamp) return 1; // b comes first if a has no timestamp
-                if (!b.feedback_timestamp) return -1; // a comes first if b has no timestamp
-                return new Date(b.feedback_timestamp).getTime() - new Date(a.feedback_timestamp).getTime();
-              });
-              return mapped;
-            } catch (e) { return []; }
-          })()
-        : (Array.isArray(partner.interactions) ? partner.interactions : []);
-      
-      const feedbackData = typeof partner.feedback === 'string'
+          try {
+            const parsed = partnerData.interactions ? JSON.parse(partnerData.interactions) : [];
+            const mapped = Array.isArray(parsed)
+              ? parsed.map((item: any) => ({
+                  ...item,
+                  productName: item.productName || item.product_name || '',
+                  product_name: item.productName || item.product_name || '',
+                  designation: item.designation || '',
+                  feedback_timestamp: item.feedback_timestamp || '',
+                }))
+              : [];
+            mapped.sort((a, b) => {
+              if (!a.feedback_timestamp && !b.feedback_timestamp) return 0;
+              if (!a.feedback_timestamp) return 1;
+              if (!b.feedback_timestamp) return -1;
+              return new Date(b.feedback_timestamp).getTime() - new Date(a.feedback_timestamp).getTime();
+            });
+            return mapped;
+          } catch {
+            return [];
+          }
+        })()
+        : (Array.isArray(partnerData.interactions) ? partnerData.interactions : []);
+
+      const feedbackData = typeof partnerData.feedback === 'string'
         ? (() => {
-            try {
-              const parsed = JSON.parse(partner.feedback);
-              // Ensure it's an array
-              return Array.isArray(parsed) ? parsed : [];
-            } catch (e) { return []; }
-          })()
-        : (Array.isArray(partner.feedback) ? partner.feedback : []);
-      
-      // To ensure the history view updates correctly, we'll set it in the state.
-      // We also reverse it here for display purposes so the latest is at the top.
+          try {
+            const parsed = JSON.parse(partnerData.feedback);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })()
+        : (Array.isArray(partnerData.feedback) ? partnerData.feedback : []);
+
       setFeedbackHistory(feedbackData);
 
-      // The form fields should be for adding NEW feedback, so we'll clear them.
-      const latestFeedback = feedbackData.length > 0 ? feedbackData[feedbackData.length - 1] : null;
-      
       form.reset({
         name: partner.name,
         email: partner.email,
         phone: partner.phone,
         company: partner.company,
-        specialization: partner.specialization,
+        specialization: partner.specialization || '',
         identity: parseJsonSafe(partner.identity),
         zone: parseJsonSafe(partner.zone),
         paymentTerms: partner.paymentTerms,
-        assignedUserIds: partner.assignedUserIds || [],
-        productTypes: partner.productTypes || [],
-        partner_program: partner.partner_program,
-        stage_owner: partner.stage_owner || 'none',
-        partner_tag: parseJsonSafe(partner.partner_tag),
-        partner_type: partner.partner_type || 'silver',
-        source_of_partner: partner.source_of_partner || 'webinar',
-        designation: partner.designation || '',
-        city: partner.city || '',
-        vertical: partner.vertical || '',
-        contacts: contacts,
-        interactions: interactions,
-        // Clear the fields for adding new feedback. The history is shown below.
+        assignedUserId: isIsrRole && currentUser
+          ? currentUser.id
+          : (partnerData.assignedUserId ?? partnerData.assigned_user_id ?? ''),
+        productTypes: parseJsonSafe(partnerData.productTypes ?? partnerData.product_types),
+        partner_program: partnerData.partner_program,
+        stage_owner: partnerData.stage_owner || 'none',
+        partner_tag: parseJsonSafe(partnerData.partner_tag),
+        partner_type: partnerData.partner_type || 'silver',
+        source_of_partner: partnerData.source_of_partner || 'webinar',
+        designation: partnerData.designation || '',
+        city: partnerData.city || '',
+        vertical: partnerData.vertical || '',
+        contacts,
+        interactions,
         feedback_status: '',
         feedback_notes: '',
       });
     }
-  }, [partner, form]);
+  }, [partner, form, isIsrRole, currentUser]);
 
-
-  const handleAssignedUserChange = (userId: string, checked: boolean) => {
-    setFormData(prev => {
-      const currentIds = prev.assignedUserIds || [];
-      const newIds = checked
-        ? [...currentIds, userId]
-        : currentIds.filter(id => id !== userId);
-      return { ...prev, assignedUserIds: newIds };
-    });
-  };
-
-   const logCrmAction = async (actiontype: string, details: string) => {
+  const logCrmAction = async (actiontype: string, details: string) => {
     if (!user?.id) {
-      console.error("User ID not available for logging CRM action.");
+      console.error('User ID not available for logging CRM action.');
       return;
     }
     try {
@@ -544,31 +701,62 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
         throw new Error(errorResult.message);
       }
     } catch (error: any) {
-      console.error("Error logging CRM action:", error.message);
+      console.error('Error logging CRM action:', error.message);
     }
   };
+
+  const onError = (errors: any) => {
+    console.error("Form validation errors:", errors);
+    toast({
+      title: "Validation Error",
+      description: "Please check the form for errors. Required fields might be missing or some values are invalid.",
+      variant: "destructive",
+    });
+  };
+
   const onSubmit = async (data: PartnerFormData) => {
     setIsSubmitting(true);
     try {
-      // Get existing feedback history
-      const existingFeedback = typeof partner.feedback === 'string'
-        ? (JSON.parse(partner.feedback) || [])
-        : (Array.isArray(partner.feedback) ? partner.feedback : []);
+      // CRM Update
+      const crmFormData = new FormData();
+      if (partner.portal_reseller_id) {
+        crmFormData.append('reseller_id', partner.portal_reseller_id);
+      }
+      crmFormData.append('reseller_name', data.name);
+      crmFormData.append('reseller_email', data.email);
+      crmFormData.append('reseller_companyname', data.company);
+      crmFormData.append('reseller_contactnumber', data.phone || '');
+
+      const crmResponse = await fetch(API_ENDPOINTS.UPDATE_RESELLER_DETAILS_ONCRM, {
+        method: 'POST',
+        body: crmFormData,
+      });
+
+      if (!crmResponse.ok) {
+        const errorResult = await crmResponse.json().catch(() => ({ message: `CRM update API request failed with status ${crmResponse.status}` }));
+        throw new Error(errorResult.message || 'Failed to update partner details in CRM.');
+      }
+
+      console.log('Save changes button clicked. Submitting data:', data);
+      console.log(data)
+      const partnerData = partner as any;
+      const assignedUser = users.find(u => u.id === data.assignedUserId);
+      const existingFeedback = typeof partnerData.feedback === 'string'
+        ? (JSON.parse(partnerData.feedback) || [])
+        : (Array.isArray(partnerData.feedback) ? partnerData.feedback : []);
 
       let updatedFeedbackHistory = [...existingFeedback];
 
-      // If new feedback is provided, add it to the history
       if (data.feedback_status) {
-        const newFeedbackEntry = {
-            status: data.feedback_status,
-            notes: data.feedback_notes || '',
-            timestamp: new Date().toISOString(),
-        };
-        updatedFeedbackHistory.unshift(newFeedbackEntry);
+        updatedFeedbackHistory.unshift({
+          status: data.feedback_status,
+          notes: data.feedback_notes || '',
+          timestamp: new Date().toISOString(),
+        });
       }
 
       const feedbackToSave = updatedFeedbackHistory.length > 0 ? JSON.stringify(updatedFeedbackHistory) : null;
-
+      console.log(assignedUser, assignedUser?.name);
       const { error } = await supabase
         .from('partners')
         .update({
@@ -576,12 +764,15 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
           email: data.email,
           contact_number: data.phone,
           company: data.company,
-          specialization: data.specialization,
+          specialization: data.specialization || '',
           identity: data.identity && data.identity.length > 0 ? JSON.stringify(data.identity) : null,
           zone: data.zone && data.zone.length > 0 ? JSON.stringify(data.zone) : null,
           payment_terms: data.paymentTerms,
-          assigned_user_ids: data.assignedUserIds,
+          // assigned_user_id: data.assignedUserId === 'none' ? null : data.assignedUserId,
+          // assigned_user_ids: data.assignedUserId === 'none' ? null : [data.assignedUserId],
+          assigned_manager: assignedUser ? assignedUser.name : null,
           product_types: data.productTypes,
+          product_types: data.productTypes && data.productTypes.length > 0 ? JSON.stringify(data.productTypes) : null,
           partner_program: data.partner_program,
           stage_owner: data.stage_owner === 'none' ? null : data.stage_owner,
           partner_tag: data.partner_tag && data.partner_tag.length > 0 ? JSON.stringify(data.partner_tag) : null,
@@ -591,7 +782,9 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
           city: data.city,
           vertical: data.vertical,
           contacts: data.contacts && data.contacts.length > 0 ? JSON.stringify(data.contacts) : null,
-          interactions: data.interactions && data.interactions.length > 0 ? JSON.stringify(data.interactions) : null,
+          interactions: data.interactions && data.interactions.length > 0
+            ? JSON.stringify(data.interactions.map(interaction => normalizeInteractionForStorage(interaction as InteractionFormValue)))
+            : null,
           feedback: feedbackToSave,
         })
         .eq('id', partner.id);
@@ -599,26 +792,20 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
       if (error) throw error;
 
       toast({
-        title: "Success",
-        description: "Partner details have been updated successfully.",
+        title: 'Success',
+        description: 'Partner details have been updated successfully.',
       });
-      const logDetails = `Updated partner details for partner ${partner.name} (ID: ${partner.portal_reseller_id}).`;
-      await logCrmAction("Update Partner Details", logDetails);
-
-
+      await logCrmAction('Update Partner Details', `Updated partner details for partner ${partner.name} (ID: ${partner.portal_reseller_id}).`);
       onSuccess();
     } catch (error: any) {
       toast({
-        title: "Error",
-        description: error.message || "An unexpected error occurred.",
-        variant: "destructive",
+        title: 'Error',
+        description: error.message || 'An unexpected error occurred.',
+        variant: 'destructive',
       });
-    } finally {
       setIsSubmitting(false);
     }
   };
-
-  const userOptions = users.map(u => ({ value: u.id, label: u.name }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -628,7 +815,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
           <DialogDescription>Update the details for this partner.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-4" noValidate>
             <div className="grid grid-cols-3 gap-4">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem><Label>Partner Name</Label><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
@@ -640,6 +827,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                 <FormItem><Label>Email</Label><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
             </div>
+
             <div className="grid grid-cols-3 gap-4">
               <FormField control={form.control} name="phone" render={({ field }) => (
                 <FormItem><Label>Phone</Label><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
@@ -647,14 +835,16 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
               <FormField control={form.control} name="designation" render={({ field }) => (
                 <FormItem><Label>Designation</Label><FormControl><Input placeholder="e.g., CEO, Sales Manager" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
-              <FormField control={form.control} name="specialization" render={({ field }) => (
+              {/* <FormField control={form.control} name="specialization" render={({ field }) => (
                 <FormItem><Label>Specialization</Label><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
+              )} /> */}
               <FormField control={form.control} name="partner_program" render={({ field }) => (
                 <FormItem><Label>Partner Program</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a program" /></SelectTrigger></FormControl><SelectContent><SelectItem value="Referal Partner">Referral Partner</SelectItem><SelectItem value="Commited Partner">Committed Partner</SelectItem></SelectContent></Select><FormMessage /></FormItem>
               )} />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              
               <FormField control={form.control} name="paymentTerms" render={({ field }) => (
                 <FormItem><Label>Payment Terms</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select Payment Terms" /></SelectTrigger></FormControl><SelectContent><SelectItem value="annual-in-advance">Annual in Advance</SelectItem><SelectItem value="monthly">Monthly</SelectItem><SelectItem value="quarterly">Quarterly</SelectItem><SelectItem value="half-yearly">Half Yearly</SelectItem><SelectItem value="net-15">Net 15</SelectItem><SelectItem value="net-30">Net 30</SelectItem><SelectItem value="net-45">Net 45</SelectItem><SelectItem value="net-60">Net 60</SelectItem><SelectItem value="net-90">Net 90</SelectItem></SelectContent></Select><FormMessage /></FormItem>
               )} />
@@ -662,7 +852,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                 <FormItem><Label>Stage Owner</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a stage owner" /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Unassigned</SelectItem>{users.map((user) => (<SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="partner_type" render={({ field }) => (
-                <FormItem><Label>Partner Type</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger></FormControl><SelectContent><SelectItem value="silver">Silver</SelectItem><SelectItem value="gold">Gold</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+                <FormItem><Label>Partner Type</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger></FormControl><SelectContent><SelectItem value="silver">Silver Partner</SelectItem><SelectItem value="gold">Gold Partner</SelectItem></SelectContent></Select><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="source_of_partner" render={({ field }) => (
                 <FormItem><Label>Source of Partner</Label><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a source" /></SelectTrigger></FormControl><SelectContent>{sourceOfPartnerOptions.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
@@ -681,23 +871,20 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField
-                control={form.control}
-                name="vertical"
-                render={({ field }) => (
-                  <FormItem>
-                    <Label>Vertical</Label>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger><SelectValue placeholder="Select a vertical" /></SelectTrigger>
-                      </FormControl>
-                      <SelectContent>{verticalOptions.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )} />
-
+              {/* <FormField control={form.control} name="vertical" render={({ field }) => (
+                <FormItem>
+                  <Label>Vertical</Label>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="Select a vertical" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>{verticalOptions.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} /> */}
             </div>
+
             <FormField control={form.control} name="identity" render={({ field }) => (
               <FormItem>
                 <Label>Partner Identity</Label>
@@ -706,53 +893,9 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                     <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
                       <Checkbox
                         checked={field.value?.includes(item.id)}
-                        onCheckedChange={(checked) => {
-                          return checked
-                            ? field.onChange([...(field.value || []), item.id])
-                            : field.onChange(field.value?.filter((value) => value !== item.id));
-                        }}
-                      />
-                      <Label className="font-normal">{item.label}</Label>
-                    </div>
-                  ))}
-                </div>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="zone" render={({ field }) => (
-              <FormItem>
-                <Label>Zone (Optional)</Label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md mt-2">
-                  {zoneOptions.map((item) => (
-                    <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
-                      <Checkbox
-                        checked={field.value?.includes(item.id)}
-                        onCheckedChange={(checked) => {
-                          return checked
-                            ? field.onChange([...(field.value || []), item.id])
-                            : field.onChange(field.value?.filter((value) => value !== item.id));
-                        }}
-                      />
-                      <Label className="font-normal">{item.label}</Label>
-                    </div>
-                  ))}
-                </div>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="partner_tag" render={({ field }) => (
-              <FormItem>
-                <Label>Partner Tags</Label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md mt-2">
-                  {partnerTagOptions.map((item) => (
-                    <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
-                      <Checkbox
-                        checked={field.value?.includes(item.id)}
-                        onCheckedChange={(checked) => {
-                          return checked
-                            ? field.onChange([...(field.value || []), item.id])
-                            : field.onChange(field.value?.filter((value) => value !== item.id));
-                        }}
+                        onCheckedChange={(checked) => checked
+                          ? field.onChange([...(field.value || []), item.id])
+                          : field.onChange(field.value?.filter((value) => value !== item.id))}
                       />
                       <Label className="font-normal">{item.label}</Label>
                     </div>
@@ -762,7 +905,82 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
               </FormItem>
             )} />
 
-            {/* Additional Contacts Section */}
+            <FormField control={form.control} name="zone" render={({ field }) => (
+              <FormItem>
+                <Label>Zone (Optional)</Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md mt-2">
+                  {zoneOptions.map((item) => (
+                    <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
+                      <Checkbox
+                        checked={field.value?.includes(item.id)}
+                        onCheckedChange={(checked) => checked
+                          ? field.onChange([...(field.value || []), item.id])
+                          : field.onChange(field.value?.filter((value) => value !== item.id))}
+                      />
+                      <Label className="font-normal">{item.label}</Label>
+                    </div>
+                  ))}
+                </div>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="partner_tag" render={({ field }) => (
+              <FormItem>
+                <Label>Partner Tags</Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-md mt-2">
+                  {partnerTagOptions.map((item) => (
+                    <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
+                      <Checkbox
+                        checked={field.value?.includes(item.id)}
+                        onCheckedChange={(checked) => checked
+                          ? field.onChange([...(field.value || []), item.id])
+                          : field.onChange(field.value?.filter((value) => value !== item.id))}
+                      />
+                      <Label className="font-normal">{item.label}</Label>
+                    </div>
+                  ))}
+                </div>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField
+              control={form.control}
+              name="assignedUserId"
+              render={({ field }) => (
+                <FormItem>
+                  <Label>Assigned User</Label>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || 'none'}
+                    disabled={isIsrRole}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select assigned user" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {isIsrRole && currentUser ? (
+                        <SelectItem key={currentUser.id} value={currentUser.id}>
+                          {currentUser.name}-{currentUser.role.toLocaleUpperCase()}
+                        </SelectItem>
+                      ) : (
+                        <>
+                          <SelectItem value="none">Unassigned</SelectItem>
+                          {users.filter((u) => u.role === 'isr' || u.role === 'fsr' || u.role === 'bde').map((u) => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}-{u.role.toLocaleUpperCase()}</SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <Card className="mt-6">
               <CardHeader><CardTitle className="text-lg">Additional Contacts</CardTitle></CardHeader>
               <CardContent className="space-y-4">
@@ -845,7 +1063,6 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
               </CardContent>
             </Card>
 
-            {/* Interactions Section */}
             <Card className="mt-6">
               <CardHeader>
                 <CardTitle className="text-lg">Interactions</CardTitle>
@@ -857,11 +1074,13 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                       <TableRow>
                         <TableHead>ISR</TableHead>
                         <TableHead>Contact Person</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead>Product</TableHead>
                         <TableHead>Designation</TableHead>
                         <TableHead>Number</TableHead>
                         <TableHead>Email</TableHead>
+                        <TableHead>Source of Lead</TableHead>
                         <TableHead>FeedBack Status</TableHead>
+                        <TableHead>Follow-up Date</TableHead>
                         <TableHead>Feedback Notes</TableHead>
                         <TableHead>Feedback Time</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
@@ -872,15 +1091,15 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                         <TableRow key={field.id}>
                           <TableCell>{users.find(u => u.id === form.watch(`interactions.${index}.isrId`))?.name || 'N/A'}</TableCell>
                           <TableCell>{form.watch(`interactions.${index}.contactPerson`)}</TableCell>
-                          <TableCell>{form.watch(`interactions.${index}.status`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.productName`)}</TableCell>
                           <TableCell>{form.watch(`interactions.${index}.designation`)}</TableCell>
                           <TableCell>{form.watch(`interactions.${index}.contactNumber`)}</TableCell>
                           <TableCell>{form.watch(`interactions.${index}.contactEmail`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.source_of_lead`) || 'N/A'}</TableCell>
                           <TableCell>{form.watch(`interactions.${index}.feedback_status`)}</TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.followup_date`) || 'N/A'}</TableCell>
                           <TableCell>{form.watch(`interactions.${index}.feedback_notes`)}</TableCell>
-                          <TableCell>
-                            {form.watch(`interactions.${index}.feedback_timestamp`) ? new Date(form.watch(`interactions.${index}.feedback_timestamp`)).toLocaleString() : 'N/A'}
-                          </TableCell>
+                          <TableCell>{form.watch(`interactions.${index}.feedback_timestamp`) ? new Date(form.watch(`interactions.${index}.feedback_timestamp`)).toLocaleString() : 'N/A'}</TableCell>
                           <TableCell className="text-right">
                             <Button type="button" variant="ghost" size="icon" onClick={() => handleEditInteraction(index)}>
                               <Edit className="h-4 w-4" />
@@ -912,26 +1131,68 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border p-4 rounded-md">
                       <div className="space-y-2">
                         <Label>ISR</Label>
-                        <Select value={interactionData.isrId} onValueChange={value => setInteractionData(d => ({ ...d, isrId: value }))}>
+                        <Select
+                          value={interactionData.isrId}
+                          onValueChange={value => setInteractionData(d => ({ ...d, isrId: value }))}
+                          disabled={isIsrRole}
+                        >
                           <SelectTrigger><SelectValue placeholder="Select ISR" /></SelectTrigger>
                           <SelectContent>
-                            {users.filter(u => ['fsr', 'bde', 'team-leader'].includes(u.role)).map(user => (
-                              <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                            ))}
+                            {isIsrRole && currentUser ? (
+                              <SelectItem key={currentUser.id} value={currentUser.id}>
+                                {currentUser.name}-{currentUser.role.toLocaleUpperCase()}
+                              </SelectItem>
+                            ) : (
+                              users.filter(u => ['isr', 'fsr', 'bde'].includes(u.role)).map(user => (
+                                <SelectItem key={user.id} value={user.id}>{user.name}-{user.role.toLocaleUpperCase()}</SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
                         <Label>Contact Person</Label>
-                        <Input placeholder="Jane Smith" value={interactionData.contactPerson} onChange={e => setInteractionData(d => ({ ...d, contactPerson: e.target.value }))} />
+                        <Select
+                          value={interactionData.contactPerson}
+                          onValueChange={value => {
+                            const selectedContact = (form.getValues().contacts || []).find(contact => contact.contactName === value);
+                            setInteractionData(d => ({
+                              ...d,
+                              contactPerson: value,
+                              designation: selectedContact?.contactDesignation || '',
+                              contactNumber: selectedContact?.contactNumber || '',
+                              contactEmail: selectedContact?.contactEmail || '',
+                            }));
+                          }}
+                        >
+                          <SelectTrigger><SelectValue placeholder="Select contact person" /></SelectTrigger>
+                          <SelectContent>
+                            {(form.watch('contacts') || []).map((contact, index) => (
+                              <SelectItem key={`${contact.contactName}-${index}`} value={contact.contactName}>
+                                {contact.contactName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label>Status</Label>
-                        <Select value={interactionData.status} onValueChange={value => setInteractionData(d => ({ ...d, status: value as any }))}>
-                          <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                        <Label>Product</Label>
+                        <Select value={interactionData.productName} onValueChange={value => setInteractionData(d => ({ ...d, productName: value }))}>
+                          <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
                           <SelectContent>
-                            {interactionStatusOptions.map(opt => (
-                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                            {products.map(product => (
+                              <SelectItem key={product.id} value={product.name}>{product.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Source of Lead</Label>
+                        <Select value={interactionData.source_of_lead} onValueChange={value => setInteractionData(d => ({ ...d, source_of_lead: value }))}>
+                          <SelectTrigger><SelectValue placeholder="Select source of lead" /></SelectTrigger>
+                          <SelectContent>
+                            {sourceOfLeadOptions.map(option => (
+                              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -950,7 +1211,16 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                       </div>
                       <div className="space-y-2">
                         <Label>Feedback Status</Label>
-                        <Select value={interactionData.feedback_status} onValueChange={value => setInteractionData(d => ({ ...d, feedback_status: value }))}>
+                        <Select
+                          value={interactionData.feedback_status}
+                          onValueChange={value =>
+                            setInteractionData(d => ({
+                              ...d,
+                              feedback_status: value,
+                              followup_date: followupFeedbackStatuses.includes(value as typeof followupFeedbackStatuses[number]) ? d.followup_date : '',
+                            }))
+                          }
+                        >
                           <SelectTrigger><SelectValue placeholder="Select feedback status" /></SelectTrigger>
                           <SelectContent>
                             {feedbackStatusOptions.map(option => (
@@ -959,6 +1229,16 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                           </SelectContent>
                         </Select>
                       </div>
+                      {followupFeedbackStatuses.includes(interactionData.feedback_status as typeof followupFeedbackStatuses[number]) && (
+                        <div className="space-y-2">
+                          <Label>Follow-up Date</Label>
+                          <Input
+                            type="date"
+                            value={interactionData.followup_date}
+                            onChange={e => setInteractionData(d => ({ ...d, followup_date: e.target.value }))}
+                          />
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <Label>Feedback Notes</Label>
                         <Input
@@ -982,53 +1262,12 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
               </CardContent>
             </Card>
 
-            {/* <Card className="mt-6">
-              <CardHeader>
-                <CardTitle className="text-lg">Feedback</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormField control={form.control} name="feedback_status" render={({ field }) => (
-                    <FormItem>
-                      <Label>Add New Feedback Status</Label>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="Select feedback status" /></SelectTrigger></FormControl>
-                        <SelectContent>{feedbackStatusOptions.map(option => (<SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>))}</SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="feedback_notes" render={({ field }) => (<FormItem className="md:col-span-2"><Label>Add New Feedback Notes</Label><FormControl><Textarea placeholder="Enter feedback notes" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                </div>
-                {feedbackHistory.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="text-sm font-medium mb-2">Feedback History</h4>
-                    <ScrollArea className="h-40 w-full rounded-md border p-4">
-                      <div className="space-y-4">
-                        {feedbackHistory.map((entry, index) => (
-                          <div key={index} className={`p-3 rounded-lg text-sm space-y-2 ${index === 0 ? 'bg-blue-50 border border-blue-200' : 'bg-muted/50'}`}>
-                            <div className="flex justify-between items-start">
-                              <p className="font-semibold capitalize text-sm">
-                                {entry.status.replace(/-/g, ' ')}
-                              </p>
-                              <span className="text-xs text-muted-foreground">{new Date(entry.timestamp).toLocaleString()}</span>
-                            </div>
-                            <p className="text-muted-foreground whitespace-pre-wrap">{entry.notes || 'No notes provided.'}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </div>
-                )}
-              </CardContent>
-            </Card> */}
-
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : 'Save Changes'}
+                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Save Changes'}
               </Button>
             </DialogFooter>
           </form>
@@ -1037,3 +1276,5 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
     </Dialog>
   );
 };
+
+export default EditPartnerDialog;

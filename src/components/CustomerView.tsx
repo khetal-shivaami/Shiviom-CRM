@@ -59,6 +59,8 @@ const CustomerView = ({
   }, [searchTerm, partnerFilter, dateRange]);
 
   useEffect(() => {
+    // This effect is set to run only once on component mount by using an empty
+    // dependency array `[]`. This prevents it from re-fetching data every time the tab or window gains focus.
     const fetchInitialData = async () => {
       if (!user || !profile) return;
       setLoading(true);
@@ -125,7 +127,8 @@ const CustomerView = ({
     };
 
     fetchInitialData();
-  }, [toast, user, profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const getPartnerName = (partnerId?: string) => {
     if (!partners) {

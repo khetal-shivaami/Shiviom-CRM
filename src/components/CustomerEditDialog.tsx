@@ -10,7 +10,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/config/api';
 import CustomerStatusForm from './CustomerStatusForm';
 import CustomerAssignmentForm from './CustomerAssignmentForm';
-import UserAssignmentSelect from './UserAssignmentSelect';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -41,6 +40,9 @@ const CustomerEditDialog = ({
   const { toast } = useToast();
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  const currentUserProfile = useMemo(() => users.find(u => u.id === user?.id), [users, user]);
+  const isSalesRole = useMemo(() => !!currentUserProfile && ['isr', 'fsr', 'bde'].includes(currentUserProfile.role), [currentUserProfile]);
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -55,7 +57,7 @@ const CustomerEditDialog = ({
     caseType: '',
     contractDuration: ''
   });
-  const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
+  const [assignedUserId, setAssignedUserId] = useState<string>('');
   const [partners, setPartners] = useState<Partner[]>(initialPartners);
   const [products, setProducts] = useState<Product[]>([]);
   const [addons, setAddons] = useState<Product[]>([]);
@@ -94,9 +96,16 @@ const CustomerEditDialog = ({
         caseType: customer.case_type || '',
         contractDuration: customer.contract_duration || ''
       });
-      setAssignedUserIds(customer.assignedUserIds || []);
+      const existingAssignment = customer.assignedUserIds?.[0];
+      if (existingAssignment) {
+        setAssignedUserId(existingAssignment);
+      } else if (isSalesRole && currentUserProfile) {
+        setAssignedUserId(currentUserProfile.id);
+      } else {
+        setAssignedUserId('none');
+      }
     }
-  }, [customer]);
+  }, [customer, isSalesRole, currentUserProfile]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -287,6 +296,8 @@ const CustomerEditDialog = ({
       return;
     }
 
+    const assignedUser = users.find(u => u.id === assignedUserId);
+
     const updatesForSupabase = {
       name: formData.name,
       email: formData.email,
@@ -301,7 +312,8 @@ const CustomerEditDialog = ({
       value: parseInt(formData.value) || 0,
       contract_duration: formData.contractDuration || null,
       zone: formData.zone || null,
-      assigned_user_ids: assignedUserIds.length > 0 ? assignedUserIds : null,
+      assigned_user_ids: assignedUserId && assignedUserId !== 'none' ? [assignedUserId] : null,
+      assigned_manager: assignedUser ? assignedUser.name : null,
       last_edited_at: new Date().toISOString(),
     };
 
@@ -324,6 +336,7 @@ const CustomerEditDialog = ({
         partnerId: data.partner_id,
         deal_products: data.deal_products,
         assignedUserIds: data.assigned_user_ids,
+        assigned_manager: data.assigned_manager,
         contract_duration: data.contract_duration,
         createdAt: new Date(data.created_at),
         lastEdited: data.last_edited_at ? new Date(data.last_edited_at) : undefined,
@@ -360,23 +373,24 @@ const CustomerEditDialog = ({
 
           <CustomerAssignmentForm 
             formData={formData} 
-            partners={partners} 
             onChange={handleFormChange} 
           />
           
-         
-
           <div>
-            <label className="block text-sm font-medium mb-2">
-              Assigned Users
-            </label>
-            <UserAssignmentSelect
-              users={users}
-              assignedUserIds={assignedUserIds}
-              onAssignmentChange={setAssignedUserIds}
-              maxAssignments={3}
-              allowedRoles={['fsr', 'team-leader', 'bde']}
-            />
+            <Label htmlFor="assigned-user">Assigned User</Label>
+            <Select value={assignedUserId} onValueChange={setAssignedUserId} disabled={isSalesRole}>
+                <SelectTrigger id="assigned-user">
+                    <SelectValue placeholder="Select assigned user" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {users
+                    .filter((u) => ['fsr', 'team-leader', 'bde', 'isr'].includes(u.role))
+                    .map((user) => (
+                        <SelectItem key={user.id} value={user.id}>{user.name}-{user.role.toLocaleUpperCase()}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
           </div>
 
           {/* Plan Details Section */}

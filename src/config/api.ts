@@ -78,7 +78,10 @@ export const API_ENDPOINTS = {
   INSERT_INTO_SKU_DETAILS_ONCRM : `${API_BASE_URL}/insert_new_sku_details_oncrm/`,
   UPDATE_SKU_DETAILS_ONCRM : `${API_BASE_URL}/update_sku_details_oncrm/`,
   CREATE_NEW_PRODUCT_ONCRM : `${API_BASE_URL}/create_new_product_oncrm/`,
-  
+
+  INSERT_CRM_PARTNER_DETAILS : `${API_BASE_URL}/insert_crm_partner_details/`,
+  UPDATE_RESELLER_DETAILS_ONCRM : `${API_BASE_URL}/update_reseller_details_oncrm/`,
+  INSERT_CRM_PARTNER_DETAILSWTHCUSTOMER : `${API_BASE_URL}/insert_crm_partner_detailswthcustomer/`,
   
 
 };

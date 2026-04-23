@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Calendar, User, Building, Mail, Phone, PlusCircle, CheckCircle, Clock, AlertCircle, Check, X, FileText, ExternalLink, Loader2, XCircle, Eye, Upload, Star, CreditCard, MapPin, Tag, Link as LinkIcon, Award, Users as UsersIcon, Plus } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Building, Mail, Phone, PlusCircle, CheckCircle, Clock, AlertCircle, Check, X, FileText, ExternalLink, Loader2, XCircle, Eye, Upload, Star, CreditCard, MapPin, Tag, Link as LinkIcon, Award, Users as UsersIcon, Plus, Edit } from 'lucide-react';
 import { Partner, User as UserType, Customer, Task, PartnerNote } from '@/types';
 import PartnerOnboardingStageTimeline from './PartnerOnboardingStageTimeline';
 import { Label } from '@/components/ui/label';
@@ -15,11 +15,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/hooks/use-toast'; 
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { API_ENDPOINTS } from '@/config/api';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PartnerDomainsDialog } from './PartnerDomainsDialog';
+import { EditPartnerDialog } from './EditPartnerDialog';
 import { useTaskManager } from '@/hooks/useTaskManager';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
@@ -69,7 +70,7 @@ const formatTimeAgo = (date: Date) => {
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
   if (diffInSeconds < 60) return 'Just now';
-  
+
   const diffInMinutes = Math.floor(diffInSeconds / 60);
   if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
 
@@ -108,6 +109,38 @@ const getIdentityLabel = (identity: string) => {
     'aws-partner': 'AWS Partner',
     'it-consulting': 'IT Consulting',
     'freelance': 'Freelance',
+    'software-reseller': 'Software Reseller',
+    'marketing': 'Marketing',
+    'other': 'Other',
+    'food-beverages-manufacturing': 'Food & Beverages Manufacturing',
+    'food-beverages-retail': 'Food & Beverages Retail',
+    'hospital-healthcare': 'Hospital & Healthcare',
+    'financial-services': 'Financial Services',
+    'business-professional-services': 'Business & Professional Services',
+    'construction': 'Construction',
+    'gaming': 'Gaming',
+    'logistics': 'Logistics',
+    'retail-consumer': 'Retail & Consumer',
+    'advertising': 'Advertising',
+    'hospitality': 'Hospitality',
+    'solar': 'Solar',
+    'fmcg': 'FMCG',
+    'e-commerce': 'E - commerce',
+    'wholesale-building-materials': 'Wholesale Building Materials',
+    'media': 'Media',
+    'real-estate': 'Real Estate',
+    'it': 'IT',
+    'pharmaceutical': 'Pharmaceutical',
+    'manufacturing': 'Manufacturing',
+    'fintech': 'Fintech',
+    'startup': 'Startup',
+    'automobile-industry': 'Automobile industry',
+    'transportation': 'Transportation',
+    'import-export': 'Import & Export',
+    'software-services': 'Software & services',
+    'digital-industries': 'Digital Industries',
+    'bpo': 'BPO',
+    'kpo': 'KPO',
   };
   return labels[identity] || identity;
 };
@@ -189,6 +222,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
   const [selectedPartnerForMapping, setSelectedPartnerForMapping] = useState('');
   const [isMappingCustomer, setIsMappingCustomer] = useState(false);
   const [partnerSearchTerm, setPartnerSearchTerm] = useState('');
+  const [isEditPartnerDialogOpen, setIsEditPartnerDialogOpen] = useState(false);
 
 
   // State for Create Task
@@ -265,11 +299,10 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
       assigned_by: user?.id,
       portal_customer_id: newTask.customerId === 'none' ? null : newTask.customerId,
       customer_domain: selectedCustomer?.domainName || null,
-      partner_id: (partnerState as any).crm_id || null,
+      partner_id: (partnerState as any).id || null,
       portal_reseller_id: partnerState.portal_reseller_id || null,
       due_date: newTask.dueDate ? new Date(newTask.dueDate).toISOString() : null,
       is_onboarding_task: newTask.type === 'onboarding',
-      partner_id: (partnerState as any).id || null,
     };
 
     try {
@@ -283,19 +316,19 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
       });
       setIsCreateTaskDialogOpen(false);
       resetNewTaskForm();
-      
+
       const creatorName = user?.email || 'Unknown User';
       const logDetails = `User "${creatorName}" created new task: "${newTask.title}" for partner ${partnerState.name}`;
       await logCrmAction("Create Task", logDetails);
 
       try {
-          await fetch(API_ENDPOINTS.SEND_TASK_NOTIFICATION_FRMCRM, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(taskToInsert),
-          });
+        await fetch(API_ENDPOINTS.SEND_TASK_NOTIFICATION_FRMCRM, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(taskToInsert),
+        });
       } catch (e) {
-          console.error("Notification failed", e);
+        console.error("Notification failed", e);
       }
 
     } catch (error: any) {
@@ -468,10 +501,10 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
   const interactions = useMemo(() => {
     let parsedInteractions = [];
     if (typeof partner.interactions === 'string') {
-      try { 
+      try {
         const parsed = JSON.parse(partner.interactions);
         parsedInteractions = Array.isArray(parsed) ? parsed : [];
-      } catch (e) { 
+      } catch (e) {
         parsedInteractions = [];
       }
     } else if (Array.isArray(partner.interactions)) {
@@ -479,7 +512,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
     }
 
     // Sort by feedback_timestamp in descending order (newest first)
-    parsedInteractions.sort((a, b) => 
+    parsedInteractions.sort((a, b) =>
       new Date(b.feedback_timestamp || 0).getTime() - new Date(a.feedback_timestamp || 0).getTime()
     );
     return parsedInteractions;
@@ -686,7 +719,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
       formData.append('doctype', docType);
       formData.append(docType, file, file.name); // Use docType as the key for the file
       formData.append('uploaded_by', uploaderName);
-      formData.append('reseller_email', partnerEmailID );
+      formData.append('reseller_email', partnerEmailID);
       const response = await fetch(API_ENDPOINTS.UPLOAD_PARTNER_DOCUMENT_CRM, {
         method: 'POST',
         body: formData,
@@ -793,13 +826,13 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
         const result = await response.json();
-        console.log("result",result)
+        console.log("result", result)
         if (!result.success || !result.data || !result.data.data_result) {
           throw new Error('Invalid API response structure');
         }
 
         const apiCustomers = result.data.data_result;
-        console.log("asdasdas",apiCustomers)
+        console.log("asdasdas", apiCustomers)
         const mappedCustomers: Customer[] = apiCustomers.map((c: any) => ({
           id: c.cust_id,
           domainName: c.customer_domainname,
@@ -1025,7 +1058,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
   );
   const totalCustomerPages = Math.ceil(filteredCustomers.length / customersPerPage);
 
-
+  console.log(profile?.role)
   const VerificationControls = ({ field }: { field: keyof KycVerificationState }) => (
     <div className="flex items-center gap-1">
       <Button
@@ -1059,7 +1092,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
       <Label className="text-sm text-muted-foreground">{label}</Label>
       {url ? (
         <Button variant="link" className="p-0 h-auto text-sm font-medium" onClick={() => openDocViewer(url, label)}>
-          <ExternalLink size={14} className="mr-1"/> View Document
+          <ExternalLink size={14} className="mr-1" /> View Document
         </Button>
       ) : (
         <span className="text-sm text-muted-foreground">
@@ -1085,7 +1118,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
       <div className="flex items-center gap-4">
         {url ? (
           <Button variant="link" className="p-0 h-auto text-sm font-medium" onClick={() => openDocViewer(url, label)}>
-            <ExternalLink size={14} className="mr-1"/> View Document
+            <ExternalLink size={14} className="mr-1" /> View Document
           </Button>
         ) : (
           <span className="text-sm text-muted-foreground">
@@ -1112,9 +1145,14 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
             <p className="text-muted-foreground">Detailed onboarding progress and management</p>
           </div>
         </div>
-        <Button onClick={() => setIsCreateTaskDialogOpen(true)} className="gap-2" variant="outline">
-          <Plus size={16} /> Create Task
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setIsEditPartnerDialogOpen(true)} className="gap-2" variant="outline">
+            <Edit size={16} /> Edit Partner
+          </Button>
+          <Button onClick={() => setIsCreateTaskDialogOpen(true)} className="gap-2" variant="outline">
+            <Plus size={16} /> Create Task
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1218,88 +1256,90 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                   <div className="flex flex-wrap gap-1">{partner.partner_tag?.map((tag: string) => <Badge key={tag} variant="outline">{getPartnerTagLabel(tag)}</Badge>)}</div>
                 </div>
               </div>
-              
+
             </CardContent>
-        </Card>
+          </Card>
 
-        {/* KYC Verification Card */}
-        <Card className="mt-6">
-          <CardHeader className="flex flex-row items-start justify-between">
-            <div>
-              <CardTitle>KYC Verification</CardTitle>
-              {kycDetails && kycDetails.registration_id && kycDetails.gst_number && (
-                <Badge className={cn("mt-2", getKycStatusColor(kycDetails.kyc_status))}>
-                  {kycDetails.kyc_status}
-                </Badge>
-              )}
-            </div>
-            {kycDetails && kycDetails.registration_id && kycDetails.gst_number && (
-              <Button variant="outline" size="sm" onClick={() => {
-                setIsKycDetailModalOpen(true);
-                logCrmAction("View KYC Details", `Viewed complete KYC details for partner ${partner.name} (ID: ${partner.portal_reseller_id})`);
-              }}>
-                <Eye className="mr-2 h-4 w-4" />
-                View Complete Details
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            {isKycLoading ? (
-              <div className="flex items-center justify-center h-40">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <span className="ml-2">Loading KYC Details...</span>
-              </div>
-            ) : kycDetails?.kyc_status === 'Approved' ? (
-              <div className="flex flex-col items-center justify-center h-40 text-center">
-                <CheckCircle className="h-12 w-12 text-green-500 mb-2" />
-                <p className="font-semibold">KYC Details Already Verified</p>
-                <p className="text-sm text-muted-foreground">No further action is required for KYC.</p>
-              </div>
-            ) : kycDetails && kycDetails.registration_id && kycDetails.gst_number ? (
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <h4 className="font-semibold text-md">Tax Information</h4>
-                    <KycDetailRow label="PAN Number" value={kycDetails.pan_number} verificationField="pan_number" />
-                    <KycDetailRow label="GST Number" value={kycDetails.gst_number} verificationField="gst_number" />
-                    <KycDetailRow label="TAN Number" value={kycDetails.tan_number} verificationField="tan_number" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <h4 className="font-semibold text-md">Bank Details</h4>
-                    <KycDetailRow label="Account Holder" value={kycDetails.account_holder_name} />
-                    <KycDetailRow label="Bank Name" value={kycDetails.bank_name} />
-                    <KycDetailRow label="Account Number" value={kycDetails.acc_number} />
-                    <KycDetailRow label="IFSC Code" value={kycDetails.ifsc_code} />
-                  </div>
-
-                  <div className="space-y-1">
-                    <h4 className="font-semibold text-md">Uploaded Documents</h4>
-                    <KycDocumentRow label="PAN Card" url={kycDetails.documents?.find((d: any) => d.panCard)?.panCard} verificationField="panCardurl" />
-                    <KycDocumentRow label="GST Certificate" url={kycDetails.documents?.find((d: any) => d.gstcertificate)?.gstcertificate} verificationField="gstcertificateurl" />
-                    <KycDocumentRow label="Cancelled Cheque" url={kycDetails.documents?.find((d: any) => d.cancelCheque)?.cancelCheque} verificationField="cancelChequeurl" />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button variant="default" onClick={handleApprove} className="bg-green-600 hover:bg-green-700" disabled={isSubmittingKyc}>
-                      <CheckCircle className="mr-2 h-4 w-4" /> Approve
-                    </Button>
-                    <Button variant="destructive" onClick={() => handleRejectClick('reject')} disabled={isSubmittingKyc}>
-                      <XCircle className="mr-2 h-4 w-4" /> Reject
-                    </Button>
-                    <Button variant="destructive" className="bg-red-800 hover:bg-red-900" onClick={() => handleRejectClick('permanently-reject')} disabled={isSubmittingKyc}>
-                      <XCircle className="mr-2 h-4 w-4" /> Permanently Reject
-                    </Button>
-                  </div>
+          {/* KYC Verification Card */}
+          {(profile?.role !== 'isr' && profile?.role !== 'fsr') && (
+            <Card className="mt-6">
+              <CardHeader className="flex flex-row items-start justify-between">
+                <div>
+                  <CardTitle>KYC Verification</CardTitle>
+                  {kycDetails && kycDetails.registration_id && kycDetails.gst_number && (
+                    <Badge className={cn("mt-2", getKycStatusColor(kycDetails.kyc_status))}>
+                      {kycDetails.kyc_status}
+                    </Badge>
+                  )}
                 </div>
-              ) : (
-              <div className="text-center py-10 text-muted-foreground">
-                KYC details not provided by the partner.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                {kycDetails && kycDetails.registration_id && kycDetails.gst_number && (
+                  <Button variant="outline" size="sm" onClick={() => {
+                    setIsKycDetailModalOpen(true);
+                    logCrmAction("View KYC Details", `Viewed complete KYC details for partner ${partner.name} (ID: ${partner.portal_reseller_id})`);
+                  }}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    View Complete Details
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent>
+                {isKycLoading ? (
+                  <div className="flex items-center justify-center h-40">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <span className="ml-2">Loading KYC Details...</span>
+                  </div>
+                ) : kycDetails?.kyc_status === 'Approved' ? (
+                  <div className="flex flex-col items-center justify-center h-40 text-center">
+                    <CheckCircle className="h-12 w-12 text-green-500 mb-2" />
+                    <p className="font-semibold">KYC Details Already Verified</p>
+                    <p className="text-sm text-muted-foreground">No further action is required for KYC.</p>
+                  </div>
+                ) : kycDetails && kycDetails.registration_id && kycDetails.gst_number ? (
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <h4 className="font-semibold text-md">Tax Information</h4>
+                      <KycDetailRow label="PAN Number" value={kycDetails.pan_number} verificationField="pan_number" />
+                      <KycDetailRow label="GST Number" value={kycDetails.gst_number} verificationField="gst_number" />
+                      <KycDetailRow label="TAN Number" value={kycDetails.tan_number} verificationField="tan_number" />
+                    </div>
 
-        
+                    <div className="space-y-1">
+                      <h4 className="font-semibold text-md">Bank Details</h4>
+                      <KycDetailRow label="Account Holder" value={kycDetails.account_holder_name} />
+                      <KycDetailRow label="Bank Name" value={kycDetails.bank_name} />
+                      <KycDetailRow label="Account Number" value={kycDetails.acc_number} />
+                      <KycDetailRow label="IFSC Code" value={kycDetails.ifsc_code} />
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="font-semibold text-md">Uploaded Documents</h4>
+                      <KycDocumentRow label="PAN Card" url={kycDetails.documents?.find((d: any) => d.panCard)?.panCard} verificationField="panCardurl" />
+                      <KycDocumentRow label="GST Certificate" url={kycDetails.documents?.find((d: any) => d.gstcertificate)?.gstcertificate} verificationField="gstcertificateurl" />
+                      <KycDocumentRow label="Cancelled Cheque" url={kycDetails.documents?.find((d: any) => d.cancelCheque)?.cancelCheque} verificationField="cancelChequeurl" />
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4">
+                      <Button variant="default" onClick={handleApprove} className="bg-green-600 hover:bg-green-700" disabled={isSubmittingKyc}>
+                        <CheckCircle className="mr-2 h-4 w-4" /> Approve
+                      </Button>
+                      <Button variant="destructive" onClick={() => handleRejectClick('reject')} disabled={isSubmittingKyc}>
+                        <XCircle className="mr-2 h-4 w-4" /> Reject
+                      </Button>
+                      <Button variant="destructive" className="bg-red-800 hover:bg-red-900" onClick={() => handleRejectClick('permanently-reject')} disabled={isSubmittingKyc}>
+                        <XCircle className="mr-2 h-4 w-4" /> Permanently Reject
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-10 text-muted-foreground">
+                    KYC details not provided by the partner.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+
         </div>
 
         {/* Main Content */}
@@ -1332,60 +1372,60 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
               />
 
               {/* Related Tasks */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Related Tasks</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {tasksLoading ? (
-              <p className="text-sm text-muted-foreground">Loading tasks...</p>
-            ) : partnerTasks.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Assigned To</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {partnerTasks.map((task) => (
-                    <TableRow key={task.id}>
-                      <TableCell className="font-medium">{task.title}</TableCell>
-                      <TableCell>{getUserName(task.assigned_to)}</TableCell>
-                      <TableCell>{task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}</TableCell>
-                      <TableCell><Badge className={cn("capitalize", getTaskPriorityColor(task.priority))}>{task.priority}</Badge></TableCell>
-                      <TableCell><Badge className={cn("capitalize", getTaskStatusColor(task.status))}>{task.status}</Badge></TableCell>
-                      <TableCell>
-                          {task.status !== 'completed' && task.status !== 'cancelled' && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleMarkTaskComplete(task)}><CheckCircle className="h-4 w-4 text-green-600" /></Button>
-                                </TooltipTrigger>
-                                <TooltipContent><p>Mark as Complete</p></TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="text-center py-6">
-                <p className="text-muted-foreground mb-4">No tasks found for this partner.</p>
-                {/* <Button onClick={() => onNavigateToTasks?.(partner.id)}>
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Related Tasks</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {tasksLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading tasks...</p>
+                  ) : partnerTasks.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Assigned To</TableHead>
+                          <TableHead>Due Date</TableHead>
+                          <TableHead>Priority</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {partnerTasks.map((task) => (
+                          <TableRow key={task.id}>
+                            <TableCell className="font-medium">{task.title}</TableCell>
+                            <TableCell>{getUserName(task.assigned_to)}</TableCell>
+                            <TableCell>{task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A'}</TableCell>
+                            <TableCell><Badge className={cn("capitalize", getTaskPriorityColor(task.priority))}>{task.priority}</Badge></TableCell>
+                            <TableCell><Badge className={cn("capitalize", getTaskStatusColor(task.status))}>{task.status}</Badge></TableCell>
+                            <TableCell>
+                              {task.status !== 'completed' && task.status !== 'cancelled' && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleMarkTaskComplete(task)}><CheckCircle className="h-4 w-4 text-green-600" /></Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Mark as Complete</p></TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="text-center py-6">
+                      <p className="text-muted-foreground mb-4">No tasks found for this partner.</p>
+                      {/* <Button onClick={() => onNavigateToTasks?.(partner.id)}>
                   <PlusCircle className="h-4 w-4 mr-2" />
                   Create Task
                 </Button> */}
-              </div>
-            )}
-          </CardContent>
-          </Card>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Partner's Customers */}
               <Card className="mt-6">
@@ -1418,45 +1458,45 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                     </div>
                   ) : partnerCustomers.length > 0 ? (
                     filteredCustomers.length > 0 ? (
-                    <>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Customer Name</TableHead>
-                            <TableHead>Domain</TableHead>
-                            <TableHead>Email</TableHead>
-                            <TableHead>Phone</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {paginatedCustomers.map((customer) => (
-                            <TableRow
-                              key={customer.id}
-                              onClick={() => openMapCustomerModal(customer)}
-                              className="cursor-pointer hover:bg-muted/50"
-                            >
-                              <TableCell className="font-medium">{customer.name}</TableCell>
-                              <TableCell>{customer.domainName}</TableCell>
-                              <TableCell>{customer.email}</TableCell>
-                              <TableCell>{customer.phone}</TableCell>
+                      <>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Customer Name</TableHead>
+                              <TableHead>Domain</TableHead>
+                              <TableHead>Email</TableHead>
+                              <TableHead>Phone</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                      {totalCustomerPages > 1 && (
-                        <div className="flex items-center justify-end space-x-2 pt-4">
-                          <span className="text-sm text-muted-foreground">
-                            Page {customerCurrentPage} of {totalCustomerPages}
-                          </span>
-                          <Button variant="outline" size="sm" onClick={() => setCustomerCurrentPage(p => p - 1)} disabled={customerCurrentPage === 1}>
-                            Previous
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => setCustomerCurrentPage(p => p + 1)} disabled={customerCurrentPage >= totalCustomerPages}>
-                            Next
-                          </Button>
-                        </div>
-                      )}
-                    </>
+                          </TableHeader>
+                          <TableBody>
+                            {paginatedCustomers.map((customer) => (
+                              <TableRow
+                                key={customer.id}
+                                onClick={() => openMapCustomerModal(customer)}
+                                className="cursor-pointer hover:bg-muted/50"
+                              >
+                                <TableCell className="font-medium">{customer.name}</TableCell>
+                                <TableCell>{customer.domainName}</TableCell>
+                                <TableCell>{customer.email}</TableCell>
+                                <TableCell>{customer.phone}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        {totalCustomerPages > 1 && (
+                          <div className="flex items-center justify-end space-x-2 pt-4">
+                            <span className="text-sm text-muted-foreground">
+                              Page {customerCurrentPage} of {totalCustomerPages}
+                            </span>
+                            <Button variant="outline" size="sm" onClick={() => setCustomerCurrentPage(p => p - 1)} disabled={customerCurrentPage === 1}>
+                              Previous
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => setCustomerCurrentPage(p => p + 1)} disabled={customerCurrentPage >= totalCustomerPages}>
+                              Next
+                            </Button>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <p className="text-sm text-muted-foreground text-center py-4">No customers found matching your search.</p>
                     )
@@ -1474,12 +1514,12 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {Object.values(onboardingData.stages).flatMap(stage => 
+                    {Object.values(onboardingData.stages).flatMap(stage =>
                       stage.tasks.map(task => (
                         <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg">
                           <div className="flex items-center space-x-3">
-                            <input 
-                              type="checkbox" 
+                            <input
+                              type="checkbox"
                               checked={task.completed}
                               readOnly
                               className="rounded"
@@ -1600,6 +1640,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                           <TableHead>Email</TableHead>
                           <TableHead>Designation</TableHead>
                           <TableHead>Phone</TableHead>
+                          <TableHead>LinkedinURL</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1617,6 +1658,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                             </TableCell>
                             <TableCell>{contact.contactDesignation || 'N/A'}</TableCell>
                             <TableCell>{contact.contactNumber || 'N/A'}</TableCell>
+                            <TableCell>{contact.contactLinkedinURL || 'N/A'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1644,7 +1686,9 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                           <TableHead>Email</TableHead>
                           <TableHead>Phone</TableHead>
                           <TableHead>Feedback Status</TableHead>
+                          <TableHead>Follow Up date</TableHead>
                           <TableHead>Feedback Notes</TableHead>
+                          <TableHead>Feedback Date</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1664,7 +1708,13 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                             </TableCell>
                             <TableCell>{interaction.contactNumber || 'N/A'}</TableCell>
                             <TableCell>{interaction.feedback_status || 'N/A'}</TableCell>
+                            <TableCell>{interaction.followup_date || 'N/A'}</TableCell>
                             <TableCell>{interaction.feedback_notes || 'N/A'}</TableCell>
+                            <TableCell>
+                              {interaction.feedback_timestamp
+                                ? new Date(interaction.feedback_timestamp).toLocaleDateString('en-GB')
+                                : 'N/A'}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1696,7 +1746,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                   <Button onClick={handleAddNote} disabled={isSubmittingNote || !newNote.trim()}>
                     {isSubmittingNote ? 'Adding Note...' : 'Add Note'}
                   </Button>
-                  
+
                   <div className="space-y-3 mt-6 max-h-96 overflow-y-auto pr-2">
                     {isNotesLoading ? (
                       <p className="text-muted-foreground">Loading notes...</p>
@@ -1745,7 +1795,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                   <Button onClick={handleAddComment} disabled={isSubmittingNote || !newComment.trim()}>
                     {isSubmittingNote ? 'Adding Comment...' : 'Add Comment'}
                   </Button>
-                  
+
                   <div className="space-y-3 mt-6 max-h-96 overflow-y-auto pr-2">
                     {isCommentsLoading ? (
                       <p className="text-muted-foreground">Loading comments...</p>
@@ -1769,6 +1819,17 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
           </Tabs>
         </div>
       </div>
+
+      <EditPartnerDialog
+        partner={partnerState}
+        users={users}
+        open={isEditPartnerDialogOpen}
+        onOpenChange={setIsEditPartnerDialogOpen}
+        onSuccess={() => {
+          setIsEditPartnerDialogOpen(false);
+          window.location.reload();
+        }}
+      />
 
       {/* Rejection Dialog */}
       <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
@@ -1848,7 +1909,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                         <>
                           <KycDetailRowSimple label="Owner Full Name" value={kycDetails.owner_full_name} />
                           <KycDetailRowSimple label="Owner Email" value={kycDetails.owner_email} />
-                          
+
                         </>
                       )}
                     </CardContent>
@@ -1882,22 +1943,22 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                         <h4 className="font-medium text-sm mb-2">Office Address</h4>
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap">{kycDetails.pr_officeaddress || 'Not Provided'}</p>
                         {(kycDetails.pr_city || kycDetails.pr_state || kycDetails.pr_pincode) && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                                {kycDetails.pr_city && <span>{kycDetails.pr_city}, </span>}
-                                {kycDetails.pr_state && <span>{kycDetails.pr_state} - </span>}
-                                {kycDetails.pr_pincode && <span>{kycDetails.pr_pincode}</span>}
-                            </p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {kycDetails.pr_city && <span>{kycDetails.pr_city}, </span>}
+                            {kycDetails.pr_state && <span>{kycDetails.pr_state} - </span>}
+                            {kycDetails.pr_pincode && <span>{kycDetails.pr_pincode}</span>}
+                          </p>
                         )}
                       </div>
                       <div className="border-t pt-4">
                         <h4 className="font-medium text-sm mb-2">Registered Address</h4>
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap">{kycDetails.address || 'Not Provided'}</p>
                         {(kycDetails.city || kycDetails.state || kycDetails.pincode) && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                                {kycDetails.city && <span>{kycDetails.city}, </span>}
-                                {kycDetails.state && <span>{kycDetails.state} - </span>}
-                                {kycDetails.pincode && <span>{kycDetails.pincode}</span>}
-                            </p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {kycDetails.city && <span>{kycDetails.city}, </span>}
+                            {kycDetails.state && <span>{kycDetails.state} - </span>}
+                            {kycDetails.pincode && <span>{kycDetails.pincode}</span>}
+                          </p>
                         )}
                       </div>
                     </CardContent>
@@ -1939,27 +2000,27 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
           <div className="space-y-4">
             <div>
               <Label htmlFor="task-title">Task Title *</Label>
-              <Input 
+              <Input
                 id="task-title"
                 placeholder="Enter task title"
                 value={newTask.title}
-                onChange={(e) => setNewTask({...newTask, title: e.target.value})}
+                onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
               />
             </div>
             <div>
               <Label htmlFor="task-description">Description</Label>
-              <Textarea 
+              <Textarea
                 id="task-description"
                 placeholder="Enter task description"
                 rows={3}
                 value={newTask.description}
-                onChange={(e) => setNewTask({...newTask, description: e.target.value})}
+                onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="task-priority">Priority</Label>
-                <Select value={newTask.priority} onValueChange={(value: any) => setNewTask({...newTask, priority: value})}>
+                <Select value={newTask.priority} onValueChange={(value: any) => setNewTask({ ...newTask, priority: value })}>
                   <SelectTrigger id="task-priority">
                     <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
@@ -1973,7 +2034,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
               </div>
               <div>
                 <Label htmlFor="task-type">Task Type</Label>
-                <Select value={newTask.type} onValueChange={(value: any) => setNewTask({...newTask, type: value})}>
+                <Select value={newTask.type} onValueChange={(value: any) => setNewTask({ ...newTask, type: value })}>
                   <SelectTrigger id="task-type">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
@@ -1994,9 +2055,9 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="task-customer">Customer</Label>
-                <Select 
-                  value={newTask.customerId} 
-                  onValueChange={(value) => setNewTask({...newTask, customerId: value})}
+                <Select
+                  value={newTask.customerId}
+                  onValueChange={(value) => setNewTask({ ...newTask, customerId: value })}
                 >
                   <SelectTrigger id="task-customer">
                     <SelectValue placeholder="Select customer (optional)" />
@@ -2013,7 +2074,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
               </div>
               <div>
                 <Label htmlFor="task-assignedTo">Assign To *</Label>
-                <Select value={newTask.assignedTo} onValueChange={(value) => setNewTask({...newTask, assignedTo: value})}>
+                <Select value={newTask.assignedTo} onValueChange={(value) => setNewTask({ ...newTask, assignedTo: value })}>
                   <SelectTrigger id="task-assignedTo">
                     <SelectValue placeholder="Select user" />
                   </SelectTrigger>
@@ -2029,11 +2090,11 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
             </div>
             <div>
               <Label htmlFor="task-dueDate">Due Date</Label>
-              <Input 
+              <Input
                 id="task-dueDate"
                 type="date"
                 value={newTask.dueDate}
-                onChange={(e) => setNewTask({...newTask, dueDate: e.target.value})}
+                onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
               />
             </div>
           </div>
@@ -2092,18 +2153,18 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                         p.name.toLowerCase().includes(partnerSearchTerm.toLowerCase()) ||
                         (p.company || '').toLowerCase().includes(partnerSearchTerm.toLowerCase())
                       ).map(p => (
-                      <TableRow
-                        key={p.id}
-                        onClick={() => setSelectedPartnerForMapping(p.portal_reseller_id!)}
-                        className={cn(
-                          "cursor-pointer",
-                          selectedPartnerForMapping === p.portal_reseller_id && "bg-muted hover:bg-muted"
-                        )}
-                      >
-                        <TableCell>{p.name}</TableCell>
-                        <TableCell>{p.company}</TableCell>
-                      </TableRow>
-                    ))}
+                        <TableRow
+                          key={p.id}
+                          onClick={() => setSelectedPartnerForMapping(p.portal_reseller_id!)}
+                          className={cn(
+                            "cursor-pointer",
+                            selectedPartnerForMapping === p.portal_reseller_id && "bg-muted hover:bg-muted"
+                          )}
+                        >
+                          <TableCell>{p.name}</TableCell>
+                          <TableCell>{p.company}</TableCell>
+                        </TableRow>
+                      ))}
                   </TableBody>
                 </Table>
               </div>

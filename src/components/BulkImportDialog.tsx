@@ -284,72 +284,125 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
 
         try {
             if (type === 'partners') {
-                const partnersToInsert = previewData.map(row => {
-                    const contacts = [];
-                    if (row['Contact Person Name 1']) {
-                        contacts.push({
-                            contactName: row['Contact Person Name 1'],
-                            contactDesignation: row['Designation 1'],
-                            contactEmail: row['Email ID 1'],
-                            contactNumber: row['Contact 1'],
-                            contactLinkedinURL: row['Linkdin Profile']
-                        });
-                    }
-                    for (let i = 1; i <= 2; i++) {
-                        if (row[`POC name ${i}`]) {
+                const importErrors: string[] = [];
+                const successfullyImported = [];
+
+                for (const row of previewData) {
+                    try {
+                        const contacts = [];
+                        if (row['Contact Person Name 1'] && row['Contact Person Name 1'] !== 'NA') {
                             contacts.push({
-                                contactName: row[`POC name ${i}`],
-                                contactDesignation: row[`POC Designation ${i}`],
-                                contactEmail: row[`POC Email ID ${i}`],
-                                contactNumber: row[`POC Contact ${i}`],
-                                contactLinkedinURL: row[`POC Linkedin Profile ${i}`]
+                                contactName: row['Contact Person Name 1'],
+                                contactDesignation: row['Designation 1'] !== 'NA' ? row['Designation 1'] : '',
+                                contactEmail: row['Email ID 1'] !== 'NA' ? row['Email ID 1'] : '',
+                                contactNumber: row['Contact 1'] !== 'NA' ? row['Contact 1'] : '',
+                                contactLinkedinURL: row['Linkdin Profile'] !== 'NA' ? row['Linkdin Profile'] : '',
                             });
                         }
-                    }
+                        for (let i = 1; i <= 2; i++) {
+                            if (row[`POC name ${i}`] && row[`POC name ${i}`] !== 'NA') {
+                                contacts.push({
+                                    contactName: row[`POC name ${i}`],
+                                    contactDesignation: row[`POC Designation ${i}`] !== 'NA' ? row[`POC Designation ${i}`] : '',
+                                    contactEmail: row[`POC Email ID ${i}`] !== 'NA' ? row[`POC Email ID ${i}`] : '',
+                                    contactNumber: row[`POC Contact ${i}`] !== 'NA' ? row[`POC Contact ${i}`] : '',
+                                    contactLinkedinURL: row[`POC Linkedin Profile ${i}`] !== 'NA' ? row[`POC Linkedin Profile ${i}`] : '',
+                                });
+                            }
+                        }
 
-                    const feedback = [];
-                    if (row['Feedback']) {
-                        feedback.push({
-                            notes: row['Feedback'],
-                            status: row['Status'],
-                            timestamp: new Date().toISOString()
+                        const feedback = [];
+                        if (row['Feedback'] && row['Feedback'] !== 'NA') {
+                            feedback.push({
+                                notes: row['Feedback'],
+                                status: row['Status'],
+                                timestamp: new Date().toISOString(),
+                            });
+                        }
+
+                        const partnerToInsert = {
+                            name: row['Company Name'],
+                            company: row['Company Name'],
+                            email: row['Email ID'],
+                            contact_number: row['Contact Number'],
+                            city: row['City'],
+                            specialization: row['Type of Business'],
+                            status: row['Status'] || 'active',
+                            contacts: contacts.length > 0 ? JSON.stringify(contacts) : null,
+                            feedback: feedback.length > 0 ? JSON.stringify(feedback) : null,
+                            onboarding_stage: 'outreach',
+                            payment_terms: 'net-30',
+                            assigned_manager: row['ISR Name'],
+                        };
+
+                        const { data: insertedPartner, error: insertError } = await supabase
+                            .from('partners')
+                            .insert(partnerToInsert)
+                            .select()
+                            .single();
+
+                        if (insertError) throw new Error(`Supabase insert failed for ${partnerToInsert.email}: ${insertError.message}`);
+
+                        const crmPayload = {
+                            partnername: partnerToInsert.name,
+                            partneremailid: partnerToInsert.email,
+                            partnermobilenumber: partnerToInsert.contact_number,
+                            partnercompanyname: partnerToInsert.company,
+                            customerdomain: row['Domain']
+                        };
+
+                        const crmResponse = await fetch(API_ENDPOINTS.INSERT_CRM_PARTNER_DETAILSWTHCUSTOMER, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(crmPayload),
                         });
+
+                        const crmResult = await crmResponse.json();
+
+                        if (crmResponse.ok && crmResult.success && crmResult.data?.reseller_id) {
+                            await supabase
+                                .from('partners')
+                                .update({ portal_reseller_id: crmResult.data.reseller_id })
+                                .eq('id', insertedPartner.id);
+                            successfullyImported.push({ ...partnerToInsert, id: insertedPartner.id, portal_reseller_id: crmResult.data.reseller_id });
+                        } else {
+                            importErrors.push(`CRM sync failed for ${partnerToInsert.email}: ${crmResult.message || 'No reseller_id returned'}`);
+                            successfullyImported.push({ ...partnerToInsert, id: insertedPartner.id }); // Still counts as imported
+                        }
+                    } catch (error: any) {
+                        importErrors.push(error.message);
                     }
+                }
 
-                    return {
-                        name: row['Company Name'],
-                        company: row['Company Name'],
-                        email: row['Email ID'],
-                        contact_number: row['Contact Number'],
-                        city: row['City'],
-                        specialization: row['Type of Business'],
-                        status: row['Status'] || 'active',
-                        contacts: contacts.length > 0 ? JSON.stringify(contacts) : null,
-                        feedback: feedback.length > 0 ? JSON.stringify(feedback) : null,
-                        onboarding_stage: 'outreach',
-                        payment_terms: 'net-30', // Default value as it's not in CSV but is NOT NULL
-                        assigned_manager: row['ISR Name'],
-                    };
-                });
+                if (successfullyImported.length > 0) {
+                    toast({ title: "Import Complete", description: `${successfullyImported.length} of ${previewData.length} partners imported.` });
+                    await logCrmAction("Bulk Import", `Imported ${successfullyImported.length} records into ${type}.`);
+                }
 
-                const { error } = await supabase.from('partners').insert(partnersToInsert);
+                if (importErrors.length > 0) {
+                    setErrors(importErrors);
+                    toast({ title: "Import Issues", description: `${importErrors.length} records failed to import or sync.`, variant: "destructive" });
+                }
 
-                if (error) throw error;
+                if (successfullyImported.length > 0) {
+                    setSuccess(true);
+                    setTimeout(() => {
+                        resetState();
+                        setOpen(false);
+                        onImport(successfullyImported);
+                    }, 2000);
+                }
 
-                setSuccess(true);
-                toast({ title: "Import Successful", description: `${previewData.length} partners have been imported successfully.` });
-                await logCrmAction("Bulk Import", `Imported ${previewData.length} records into ${type}.`);
-                setTimeout(() => {
-                    resetState();
-                    setOpen(false);
-                    onImport(partnersToInsert);
-                }, 2000);
             } else {
                 const finalData = finalizeData(previewData);
                 onImport(finalData);
                 setSuccess(true);
-                await logCrmAction("Bulk Import", `Imported ${finalData.length} records into ${type}.`);
-                setTimeout(() => { resetState(); setOpen(false); }, 2000);
+                await logCrmAction("Bulk Import", `Imported ${previewData.length} records into ${type}.`);
+                setTimeout(() => {
+                    resetState();
+                    setOpen(false);
+                    onImport(finalData);
+                }, 2000);
             }
         } catch (error: any) {
             setErrors([error.message]);
