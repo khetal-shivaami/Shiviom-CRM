@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Input, InputProps } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface CustomerViewProps {
   products: Product[];
@@ -34,6 +35,7 @@ const CustomerView = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [customerTagFilter, setCustomerTagFilter] = useState('all');
   const [partnerFilter, setPartnerFilter] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -90,18 +92,19 @@ const CustomerView = ({
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const result = await response.json();
-        if (!result.success || !result.data || !result.data.data_result) {
+        console.log(result);
+        if (!result.success || !result.data) {
           throw new Error('Invalid API response structure for customers.');
         }
 
-        const apiCustomers = result.data.data_result;
+        const apiCustomers = result.data;
         const partnerIdMap = new Map(localPartners.map(p => [p.portal_reseller_id, p.id]));
 
         const transformedData: Customer[] = apiCustomers.map((c: any) => {
           const supabasePartnerId = c.reseller_id ? partnerIdMap.get(c.reseller_id) : undefined;
           return {
             id: c.cust_id,
-            name: c.company_name || 'N/A',
+            name: c.company_name || c.customer_company_name|| 'N/A',
             email: c.customer_emailid || '',
             phone: c.customer_contact_number || '',
             company: c.customer_company_name || c.customer_domainname || 'N/A',
@@ -114,6 +117,7 @@ const CustomerView = ({
             value: 0,
             productIds: [],
             assignedUserIds: [],
+            customerTag: c.customer_tag || (c.reseller_name && c.reseller_name.toLowerCase().includes('axima') ? 'Axima Customer' : 'Shiviom Customer'),
           };
         }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
@@ -158,17 +162,13 @@ const CustomerView = ({
                            (customer.domainName && customer.domainName.toLowerCase().includes(searchTermLower)) ||
                            partnerName.toLowerCase().includes(searchTermLower);
 
-      return partnerMatch && dateMatch && searchMatch;
+      const customerTagMatch = customerTagFilter === 'all' || customer.customerTag === customerTagFilter;
+
+      return partnerMatch && dateMatch && searchMatch && customerTagMatch;
     });
-  }, [customers, searchTerm, partnerFilter, dateRange, partners]);
+  }, [customers, searchTerm, partnerFilter, dateRange, partners, customerTagFilter]);
 
   // Pagination logic
-  const totalPages = Math.ceil(filteredCustomers.length / recordsPerPage);
-  const indexOfLastRecord = currentPage * recordsPerPage;
-  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
-  const currentCustomerRecords = filteredCustomers.slice(indexOfFirstRecord, indexOfLastRecord);
-
-
   const handleCustomerClick = (customer: Customer) => {
     setSelectedCustomer(customer);
   };
@@ -176,6 +176,11 @@ const CustomerView = ({
   const handleBackToList = () => {
     setSelectedCustomer(null);
   };
+
+  const totalPages = Math.ceil(filteredCustomers.length / recordsPerPage);
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const currentCustomerRecords = filteredCustomers.slice(indexOfFirstRecord, indexOfLastRecord);
 
   const handleCustomerUpdate = (updatedCustomer: Customer) => {
     // Update the list of customers
@@ -214,7 +219,9 @@ const CustomerView = ({
   const stats = {
     total: filteredCustomers.length,
     totalValue: filteredCustomers.reduce((sum, customer) => sum + customer.value, 0),
-    activeProducts: new Set(filteredCustomers.flatMap(c => c.productIds || [])).size,
+    shiviomCustomersCount: filteredCustomers.filter(c => c.customerTag === 'Shiviom Customer').length,
+    aximaCustomersCount: filteredCustomers.filter(c => c.customerTag === 'Axima Customer').length,
+    activeProducts: new Set(filteredCustomers.flatMap(c => c.productIds || [])).size, // This seems unrelated to the request, but keeping it as is.
     avgValue: filteredCustomers.length > 0 ? filteredCustomers.reduce((sum, customer) => sum + customer.value, 0) / filteredCustomers.length : 0
   };
 
@@ -284,7 +291,7 @@ const CustomerView = ({
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold">{stats.total}</div>
@@ -307,6 +314,18 @@ const CustomerView = ({
           <CardContent className="p-4">
             <div className="text-2xl font-bold">₹{stats.avgValue.toLocaleString('en-IN')}</div>
             <p className="text-sm text-muted-foreground">Avg. Value</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold">{stats.shiviomCustomersCount}</div>
+            <p className="text-sm text-muted-foreground">Shiviom Customers</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold">{stats.aximaCustomersCount}</div>
+            <p className="text-sm text-muted-foreground">Axima Customers</p>
           </CardContent>
         </Card>
       </div>
@@ -372,6 +391,16 @@ const CustomerView = ({
                 </Command>
               </PopoverContent>
             </Popover>
+            <Select value={customerTagFilter} onValueChange={setCustomerTagFilter}>
+              <SelectTrigger className="w-full md:w-[200px]">
+                <SelectValue placeholder="Filter by Customer Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Customers</SelectItem>
+                <SelectItem value="Shiviom Customer">Shiviom Customers</SelectItem>
+                <SelectItem value="Axima Customer">Axima Customers</SelectItem>
+              </SelectContent>
+            </Select>
             <DateRangePicker date={dateRange} onDateChange={setDateRange} />
           </div>
         </CardContent>
@@ -392,6 +421,7 @@ const CustomerView = ({
                 <TableHead>Customer Details</TableHead>
                 <TableHead>Contact Info</TableHead>
                 <TableHead>Account Manager</TableHead>
+                <TableHead>Customer Type</TableHead> {/* New column for Customer Type */}
                 <TableHead>Products</TableHead>
                 <TableHead>Zone</TableHead>
                 <TableHead>Contract Value</TableHead>
@@ -411,7 +441,7 @@ const CustomerView = ({
                         <Building size={16} className="text-muted-foreground" />
                         {customer.domainName}
                       </div>
-                      <div className="text-sm text-muted-foreground">{customer.name}</div>
+                      <div className="text-sm text-muted-foreground">{customer.name || customer.company}</div>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -435,6 +465,9 @@ const CustomerView = ({
                     <div className="text-xs text-muted-foreground">
                       Partner: {customer.resellerName || getPartnerName(customer.partnerId)}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{customer.customerTag}</Badge> {/* Display customerTag */}
                   </TableCell>
                   <TableCell className="max-w-xs">
                     <div className="text-sm">{getProductNames(customer.productIds)}</div>

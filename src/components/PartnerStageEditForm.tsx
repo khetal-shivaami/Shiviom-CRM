@@ -12,6 +12,7 @@ interface PartnerStageEditFormProps {
 }
 
 const stageOptions: OnboardingStage[] = [
+  'not-contacted',
   'outreach',
   'product-overview', 
   'partner-program',
@@ -22,6 +23,7 @@ const stageOptions: OnboardingStage[] = [
 ];
 
 const stageLabels: Record<OnboardingStage, string> = {
+  'not-contacted': 'Not Contacted',
   'outreach': 'Outreach',
   'product-overview': 'Product Overview',
   'partner-program': 'Partner Program',
@@ -33,7 +35,7 @@ const stageLabels: Record<OnboardingStage, string> = {
 
 export function PartnerStageEditForm({ partner, onUpdate }: PartnerStageEditFormProps) {
   const [selectedStage, setSelectedStage] = useState<OnboardingStage>(
-    partner.onboarding?.currentStage || 'outreach'
+    partner.onboarding?.currentStage || 'not-contacted'
   );
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false);
   const [pendingStageChange, setPendingStageChange] = useState<{

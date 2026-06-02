@@ -156,6 +156,8 @@ const feedbackStatusOptions = [
   { value: 'qc-pending', label: 'QC-Pending' },
   { value: 'qc-qualified', label: 'QC-Qualified' },
   { value: 'qc-notqualified', label: 'QC-NotQualified' },
+  { value: 'connected-email', label: 'Connected Email' },
+  { value: 'lead-prospect', label: 'Lead Prospect' },
 ] as const;
 
 const sourceOfLeadOptions = [
@@ -345,7 +347,7 @@ const partnerSchema = z.object({
     contactDesignation: z.string().optional().or(z.literal('')),
     contactNumber: z.string().optional().or(z.literal('')),
     contactEmail: z.string().email('Invalid email address.').optional().or(z.literal('')),
-    contactLinkedinURL: z.string().url({ message: 'Invalid URL' }).optional().or(z.literal('')),
+    contactLinkedinURL: z.string().optional().or(z.literal('')),
   })).optional(),
   interactions: z.array(z.object({
     isrId: z.string().optional().or(z.literal('')),
@@ -405,9 +407,14 @@ const normalizeInteractionForStorage = (interaction: InteractionFormValue) => {
 
 export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSuccess }: EditPartnerDialogProps) => {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const currentUser = users.find(u => u.id === user?.id);
+
+  const userName = (profile?.first_name || profile?.last_name)
+    ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+    : user?.email;
+
   const isSalesRole = currentUser && ['isr', 'fsr', 'bde'].includes(currentUser.role);
   const isIsrRole = currentUser?.role === 'isr';
 
@@ -455,22 +462,24 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
     contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '', contactLinkedinURL: '',
   };
 
-  const handleAddOrUpdateContact = () => {
+  const handleAddOrUpdateContact = async () => {
     if (contactData.contactEmail && !z.string().email().safeParse(contactData.contactEmail).success) {
       toast({ title: 'Invalid contact email.', variant: 'destructive' });
       return;
     }
     if (editingContactIndex !== null) {
       update(editingContactIndex, contactData);
+      await logCrmAction('Update Partner Contact', `User "${userName}" updated contact for partner ${partner.name}. Details: ${JSON.stringify(contactData)}`);
       setEditingContactIndex(null);
     } else {
       append(contactData);
+      await logCrmAction('Add Partner Contact', `User "${userName}" added new contact for partner ${partner.name}. Details: ${JSON.stringify(contactData)}`);
     }
     setContactData(defaultContactValue);
     setIsContactFormOpen(false);
   };
 
-  const handleAddOrUpdateInteraction = () => {
+  const handleAddOrUpdateInteraction = async () => {
     if (interactionData.contactEmail && !z.string().email().safeParse(interactionData.contactEmail).success) {
       toast({ title: 'Invalid interaction email.', variant: 'destructive' });
       return;
@@ -504,9 +513,11 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
 
     if (editingInteractionIndex !== null) {
       interactionFieldArray.update(editingInteractionIndex, interactionWithTimestamp);
+      await logCrmAction('Update Partner Interaction', `User "${userName}" updated interaction for partner ${partner.name}. Details: ${JSON.stringify(interactionWithTimestamp)}`);
       setEditingInteractionIndex(null);
     } else {
       interactionFieldArray.prepend(interactionWithTimestamp);
+      await logCrmAction('Add Partner Interaction', `User "${userName}" added new interaction for partner ${partner.name}. Details: ${JSON.stringify(interactionWithTimestamp)}`);
     }
     setInteractionData(defaultInteractionValue);
     setIsInteractionFormOpen(false);
@@ -553,6 +564,22 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
       });
       setEditingContactIndex(index);
       setIsContactFormOpen(true);
+    }
+  };
+
+  const handleRemoveContact = async (index: number) => {
+    const contact = form.getValues().contacts?.[index];
+    if (contact) {
+      remove(index);
+      await logCrmAction('Remove Partner Contact', `User "${userName}" removed contact from partner ${partner.name}. Details: ${JSON.stringify(contact)}`);
+    }
+  };
+
+  const handleRemoveInteraction = async (index: number) => {
+    const interaction = form.getValues().interactions?.[index];
+    if (interaction) {
+      interactionFieldArray.remove(index);
+      await logCrmAction('Remove Partner Interaction', `User "${userName}" removed interaction from partner ${partner.name}. Details: ${JSON.stringify(interaction)}`);
     }
   };
 
@@ -699,7 +726,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
       if (!response.ok) {
         const errorResult = await response.json().catch(() => ({ message: `CRM log API request failed with status ${response.status}` }));
         throw new Error(errorResult.message);
-      }
+      } 
     } catch (error: any) {
       console.error('Error logging CRM action:', error.message);
     }
@@ -795,7 +822,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
         title: 'Success',
         description: 'Partner details have been updated successfully.',
       });
-      await logCrmAction('Update Partner Details', `Updated partner details for partner ${partner.name} (ID: ${partner.portal_reseller_id}).`);
+      await logCrmAction('Update Partner Details', `User "${userName}" updated partner details for partner ${partner.name} (ID: ${partner.portal_reseller_id}).`);
       onSuccess();
     } catch (error: any) {
       toast({
@@ -1008,7 +1035,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                             <Button type="button" variant="ghost" size="icon" onClick={() => handleEditContact(index)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)}>
+                            <Button type="button" variant="destructive" size="icon" onClick={() => handleRemoveContact(index)}>
                               <X className="h-4 w-4" />
                             </Button>
                           </TableCell>
@@ -1051,7 +1078,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                       </div>
                       <div className="space-y-2">
                         <Label>LinkedIn URL</Label>
-                        <Input type="url" placeholder="https://linkedin.com/in/..." value={contactData.contactLinkedinURL} onChange={e => setContactData(d => ({ ...d, contactLinkedinURL: e.target.value }))} />
+                        <Input type="text" placeholder="https://linkedin.com/in/..." value={contactData.contactLinkedinURL} onChange={e => setContactData(d => ({ ...d, contactLinkedinURL: e.target.value }))} />
                       </div>
                       <div className="flex items-end gap-2 md:col-start-3">
                         <Button type="button" onClick={handleAddOrUpdateContact}>{editingContactIndex !== null ? 'Update Contact' : 'Add Contact'}</Button>
@@ -1104,7 +1131,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                             <Button type="button" variant="ghost" size="icon" onClick={() => handleEditInteraction(index)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button type="button" variant="destructive" size="icon" onClick={() => interactionFieldArray.remove(index)}>
+                            <Button type="button" variant="destructive" size="icon" onClick={() => handleRemoveInteraction(index)}>
                               <X className="h-4 w-4" />
                             </Button>
                           </TableCell>

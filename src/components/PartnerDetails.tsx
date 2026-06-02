@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -465,6 +465,11 @@ const interactions = useMemo(() => {
   const [isEditing, setIsEditing] = useState(false);
   const [renewalManagersFromProfiles, setRenewalManagersFromProfiles] = useState<UserType[]>([]);
   const [isLoadingRenewalManagers, setIsLoadingRenewalManagers] = useState(true);
+  const [agreementFile, setAgreementFile] = useState<File | null>(null);
+  const [kycFile, setKycFile] = useState<File | null>(null);
+  const agreementFileRef = useRef<HTMLInputElement>(null);
+  const kycFileRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState<'agreement' | 'kyc' | null>(null);
   const [isEditingRenewalManager, setIsEditingRenewalManager] = useState(false);
   // State for Share KB Modal
   const [isShareKbModalOpen, setIsShareKbModalOpen] = useState(false);
@@ -2368,6 +2373,76 @@ const interactions = useMemo(() => {
     }
   };
 
+  const handleFileUpload = async (file: File, docType: 'resellerAgreement' | 'kycSignedForm') => {
+    if (!file || !partner.portal_reseller_id) {
+      toast({
+        title: "Cannot Upload",
+        description: "Partner information is missing. The partner must have a portal reseller ID.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const uploaderName = (profile?.first_name || profile?.last_name)
+      ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+      : user?.email || 'Unknown User';
+
+    setIsUploading(docType === 'resellerAgreement' ? 'agreement' : 'kyc');
+
+    try {
+      const formData = new FormData();
+      formData.append('portal_reseller_id', partner.portal_reseller_id);
+      formData.append('doctype', docType);
+      formData.append(docType, file, file.name);
+      formData.append('uploaded_by', uploaderName);
+      formData.append('reseller_email', partner.email);
+
+      const response = await fetch(API_ENDPOINTS.UPLOAD_PARTNER_DOCUMENT_CRM, {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || (result.success !== undefined && !result.success)) {
+        throw new Error(result.message || 'File upload failed via API.');
+      }
+
+      await fetchDocuments();
+
+      const logDetails = `Uploaded ${docType} for partner ${partner.name} (ID: ${partner.portal_reseller_id}).`;
+      await logCrmAction("Upload Partner Document", logDetails);
+
+      toast({
+        title: "Upload Successful",
+        description: `${docType === 'resellerAgreement' ? 'Reseller Agreement' : 'KYC Signed Form'} has been uploaded.`,
+      });
+
+      if (docType === 'resellerAgreement') {
+        setAgreementFile(null);
+        if (agreementFileRef.current) {
+          agreementFileRef.current.value = '';
+        }
+      } else {
+        setKycFile(null);
+        if (kycFileRef.current) {
+          kycFileRef.current.value = '';
+        }
+      }
+
+    } catch (error: any) {
+      const logDetails = `Failed to upload ${docType} for partner ${partner.name} (ID: ${partner.portal_reseller_id}). Error: ${error.message}`;
+      await logCrmAction("Upload Partner Document Fail", logDetails);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "An error occurred during file upload.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(null);
+    }
+  };
+
   const submitQuotationAction = async (quotation: Quotation, status: 'Accepted' | 'Rejected', reason: string) => {
     try {
       if (!partnerState.portal_reseller_id) {
@@ -3543,9 +3618,17 @@ const interactions = useMemo(() => {
                             <Button variant="outline" size="sm" onClick={() => openDocViewer(documentUrls.resellerAgreement, 'Reseller Agreement')}>
                               <Eye className="mr-2 h-4 w-4" /> View
                             </Button>
-                          ) : (
-                            <Badge variant="secondary">Not Uploaded</Badge>
-                          )}
+                          ) : ( <div className="flex items-center gap-2">
+                          <Input ref={agreementFileRef} type="file" className="max-w-xs" onChange={(e) => setAgreementFile(e.target.files ? e.target.files[0] : null)} />
+                          <Button
+                            size="sm"
+                            onClick={() => agreementFile && handleFileUpload(agreementFile, 'resellerAgreement')}
+                            disabled={!agreementFile || isUploading === 'agreement'}
+                          >
+                            {isUploading === 'agreement' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />} Upload
+                          </Button>
+                        </div>
+                      )}
                         </div>
                         <div className="flex justify-between items-center p-3 border rounded-lg">
                           <div>
@@ -3556,9 +3639,17 @@ const interactions = useMemo(() => {
                             <Button variant="outline" size="sm" onClick={() => openDocViewer(documentUrls.kycSignedForm, 'KYC Signed Form')}>
                               <Eye className="mr-2 h-4 w-4" /> View
                             </Button>
-                          ) : (
-                            <Badge variant="secondary">Not Uploaded</Badge>
-                          )}
+                          ) : (<div className="flex items-center gap-2">
+                          <Input ref={kycFileRef} type="file" className="max-w-xs" onChange={(e) => setKycFile(e.target.files ? e.target.files[0] : null)} />
+                          <Button
+                            size="sm"
+                            onClick={() => kycFile && handleFileUpload(kycFile, 'kycSignedForm')}
+                            disabled={!kycFile || isUploading === 'kyc'}
+                          >
+                            {isUploading === 'kyc' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />} Upload
+                          </Button>
+                        </div>
+                      )}
                         </div>
                       </div>
                     )}

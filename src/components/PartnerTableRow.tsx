@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle, XCircle, MessageSquare, Percent } from 'lucide-react';
+import { CheckCircle, XCircle, MessageSquare, Percent, Link } from 'lucide-react';
 import { Partner, User } from '../types';
 import { PartnerActionsDialog } from './PartnerActionsDialog';
 import { PartnerCommentsDialog } from './PartnerCommentsDialog';
@@ -16,6 +16,7 @@ interface PartnerTableRowProps {
   isSelected: boolean;
   onSelect: (partnerId: string) => void;
   onViewDetails: (partner: Partner) => void;
+  onShareAccess: (partner: Partner) => void;
   onActionSuccess: () => void;
 }
 
@@ -26,6 +27,7 @@ const PartnerTableRow = ({
   isSelected,
   onSelect,
   onViewDetails,
+  onShareAccess,
   onActionSuccess
 }: PartnerTableRowProps) => {
   const getStatusColor = (status: string) => {
@@ -316,6 +318,9 @@ const PartnerTableRow = ({
                 <Percent className="h-4 w-4" />
               </Button>
             </AddPartnerDiscountDialog> */}
+            <Button variant="ghost" size="icon" title="Share Portal Access" onClick={() => onShareAccess(partner)}>
+              <Link className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </TableCell>

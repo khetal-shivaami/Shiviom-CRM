@@ -5,7 +5,16 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, View, X, FilterX } from 'lucide-react';
+import { Search, View, X, FilterX, Link, Loader2, History, CheckCircle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +34,7 @@ import { API_ENDPOINTS } from '@/config/api';
 import { MapCustomersDialog } from './MapCustomersDialog';
 import { PartnerCommentsDialog } from './PartnerCommentsDialog';
 import { identityOptions, paymentTermOptions, partnerTagOptions, partnerTypeOptions, sourceOfPartnerOptions, zoneOptions, statusOptions, partnerProgramOptions } from './PartnerTableFilters';
+import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -33,6 +43,16 @@ interface PartnerTableProps {
   products: Product[];
   users: User[];
 
+}
+
+interface InvitationHistoryItem {
+  id: number;
+  exist_invite_id: string;
+  reseller_name: string;
+  reseller_email: string;
+  agreement_doc_status: string;
+  invitation_date: string;
+  reseller_id: string;
 }
 
 const allColumns = [
@@ -66,6 +86,7 @@ const allColumns = [
 
 const PartnerTable = ({ customers, products, users }: PartnerTableProps) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [partners, setPartners] = useState<Partner[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,6 +100,13 @@ const PartnerTable = ({ customers, products, users }: PartnerTableProps) => {
   const [selectedPartners, setSelectedPartners] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isMapCustomersOpen, setIsMapCustomersOpen] = useState(false);
+  const [isShareAccessDialogOpen, setIsShareAccessDialogOpen] = useState(false);
+  const [selectedPartnerForAccess, setSelectedPartnerForAccess] = useState<Partner | null>(null);
+  const [selectedAgreement, setSelectedAgreement] = useState('');
+  const [isSendingAccess, setIsSendingAccess] = useState(false);
+  const [invitationHistory, setInvitationHistory] = useState<InvitationHistoryItem[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
   const recordsPerPage = 10;
 
 
@@ -96,6 +124,106 @@ const PartnerTable = ({ customers, products, users }: PartnerTableProps) => {
 
   const resetAllFilters = () => {
     setActiveFilters({ status: [], identity: [], paymentTerms: [], partnerTags: [], partnerType: [], source: [], zone: [], partnerProgram: [], state: [], city: [] });
+  };
+
+  const logCrmAction = async (actiontype: string, details: string) => {
+    if (!user?.id) {
+      console.error("User ID not available for logging CRM action.");
+      return;
+    }
+    try {
+      const formData = new FormData();
+      formData.append('userid', user.id);
+      formData.append('actiontype', actiontype);
+      formData.append('path', 'Partner Table');
+      formData.append('details', details);
+
+      const response = await fetch(API_ENDPOINTS.STORE_INSERT_CRM_LOGS, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorResult = await response.json().catch(() => ({ message: `CRM log API request failed with status ${response.status}` }));
+        throw new Error(errorResult.message);
+      }
+    } catch (error: any) {
+      console.error("Error logging CRM action:", error.message);
+    }
+  };
+
+  const fetchInvitationHistory = async () => {
+    setIsHistoryLoading(true);
+    try {
+      const response = await fetch(API_ENDPOINTS.GET_EXISTING_RESELLERLOGIN_INVITATION_DETAILS, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch invitation history.');
+      }
+      const result = await response.json();
+      if (result.success && Array.isArray(result.data)) {
+        setInvitationHistory(result.data);
+      } else {
+        setInvitationHistory([]);
+        if (!result.success) {
+          throw new Error(result.message || 'API returned an error for invitation history.');
+        }
+      }
+    } catch (error: any) {
+      toast({ title: "Error Fetching History", description: error.message, variant: "destructive" });
+      setInvitationHistory([]);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isShareAccessDialogOpen) {
+      fetchInvitationHistory();
+    } else {
+      setSelectedPartnerForAccess(null);
+      setSelectedAgreement('');
+    }
+  }, [isShareAccessDialogOpen]);
+
+  const handleShareAccessClick = (partner: Partner) => {
+    setSelectedPartnerForAccess(partner);
+    setIsShareAccessDialogOpen(true);
+  };
+
+  const handleSendAccess = async () => {
+    if (!selectedPartnerForAccess) {
+      toast({ title: "No Partner Selected", variant: "destructive" });
+      return;
+    }
+    if (!selectedAgreement) {
+      toast({ title: "No Agreement Selected", description: "Please select a reseller service agreement.", variant: "destructive" });
+      return;
+    }
+    if (!selectedPartnerForAccess.email) {
+      toast({ title: "Partner Email Not Found", variant: "destructive" });
+      return;
+    }
+
+    setIsSendingAccess(true);
+    try {
+      const response = await fetch(API_ENDPOINTS.SEND_RESELLER_LOGIN_DETAILS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reseller_email: selectedPartnerForAccess.email, agreement_name: selectedAgreement, sender_email: user?.email }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) { throw new Error(result.message || 'Failed to send portal access email.'); }
+      toast({ title: "Access Sent", description: `Portal access details have been sent to ${selectedPartnerForAccess.email}.` });
+      logCrmAction("Share Portal Access", `Successfully sent portal access link to partner ${selectedPartnerForAccess.name} (${selectedPartnerForAccess.email}).`);
+      await fetchInvitationHistory();
+      setIsShareAccessDialogOpen(false);
+    } catch (error: any) {
+      toast({ title: "Error Sending Access", description: error.message, variant: "destructive" });
+      logCrmAction("Share Portal Access Fail", `Failed to send portal access to partner ${selectedPartnerForAccess.name} (${selectedPartnerForAccess.email}). Error: ${error.message}`);
+    } finally {
+      setIsSendingAccess(false);
+    }
   };
 
   const filteredPartners = useMemo(() => {
@@ -592,6 +720,7 @@ const PartnerTable = ({ customers, products, users }: PartnerTableProps) => {
                     onSelect={handleSelectPartner}
                     onViewDetails={setSelectedPartner}
                     onActionSuccess={handleActionSuccess}
+                    onShareAccess={handleShareAccessClick}
                   />
                 ))
               ) : (
@@ -642,6 +771,76 @@ const PartnerTable = ({ customers, products, users }: PartnerTableProps) => {
         onOpenChange={setIsMapCustomersOpen}
         onSuccess={handleMapSuccess}
       />
+      <Dialog open={isShareAccessDialogOpen} onOpenChange={setIsShareAccessDialogOpen}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Share Portal Access for {selectedPartnerForAccess?.name}</DialogTitle>
+            <DialogDescription>
+              Select an agreement to send portal access to {selectedPartnerForAccess?.email}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="mt-4">
+              <Label htmlFor="agreement-type">Reseller Service Agreement</Label>
+              <Select value={selectedAgreement} onValueChange={setSelectedAgreement}>
+                <SelectTrigger id="agreement-type" className="w-full">
+                  <SelectValue placeholder="Select Agreement Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Reseller Service Agreement- Shiviom Cloud LLP-15 days">Reseller Service Agreement- Shiviom Cloud LLP-15 days</SelectItem>
+                  <SelectItem value="Reseller Service Agreement- Shiviom Cloud LLP-30 days">Reseller Service Agreement- Shiviom Cloud LLP-30 days</SelectItem>
+                  <SelectItem value="Reseller Service Agreement- Shiviom Cloud LLP-Due date">Reseller Service Agreement- Shiviom Cloud LLP-Due date</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {/* <div className="mt-6">
+            <h4 className="text-lg font-semibold mb-2 flex items-center">
+              <History className="mr-2 h-5 w-5" />
+              Invitation History
+            </h4>
+            <div className="relative my-2">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or email..."
+                value={historySearchTerm}
+                onChange={(e) => setHistorySearchTerm(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <div className="border rounded-lg max-h-64 overflow-y-auto">
+              <Table>
+                <TableHeader className="sticky top-0 bg-secondary">
+                  <TableRow>
+                    <TableHead>Partner Name</TableHead>
+                    <TableHead>Partner Email</TableHead>
+                    <TableHead>Agreement Sent</TableHead>
+                    <TableHead>Invitation Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isHistoryLoading ? (
+                    <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="inline-block mr-2 h-4 w-4 animate-spin" />Loading history...</TableCell></TableRow>
+                  ) : invitationHistory.filter(item => (item.reseller_name || '').toLowerCase().includes(historySearchTerm.toLowerCase()) || (item.reseller_email || '').toLowerCase().includes(historySearchTerm.toLowerCase())).length > 0 ? (
+                    invitationHistory.filter(item => (item.reseller_name || '').toLowerCase().includes(historySearchTerm.toLowerCase()) || (item.reseller_email || '').toLowerCase().includes(historySearchTerm.toLowerCase())).map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>{item.reseller_name || 'N/A'}</TableCell>
+                        <TableCell>{item.reseller_email || 'N/A'}</TableCell>
+                        <TableCell><Badge className={item.agreement_doc_status === 'Yes' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>{item.agreement_doc_status}</Badge></TableCell>
+                        <TableCell>{new Date(item.invitation_date).toLocaleDateString()}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (<TableRow><TableCell colSpan={4} className="text-center h-24 text-muted-foreground">No invitation history found.</TableCell></TableRow>)}
+                </TableBody>
+              </Table>
+            </div>
+          </div> */}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsShareAccessDialogOpen(false)} disabled={isSendingAccess}>Cancel</Button>
+            <Button onClick={handleSendAccess} disabled={isSendingAccess || !selectedPartnerForAccess || !selectedAgreement}>{isSendingAccess && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send Access</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

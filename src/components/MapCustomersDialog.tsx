@@ -29,7 +29,7 @@ interface MapCustomersDialogProps {
 
 export const MapCustomersDialog = ({ partners, customers, open, onOpenChange, onSuccess }: MapCustomersDialogProps) => {
   const { toast } = useToast();
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
   const [availableCustomers, setAvailableCustomers] = useState<Customer[]>([]);
@@ -69,8 +69,14 @@ export const MapCustomersDialog = ({ partners, customers, open, onOpenChange, on
     const fetchAvailableCustomers = async () => {
       setIsLoadingCustomers(true);
       try {
+         const formData = new FormData();
+        if (user?.id && profile?.role) {
+            formData.append('user_id', user.id);
+            formData.append('role', profile.role);
+        }
         const response = await fetch(API_ENDPOINTS.GET_RESELLER_CUSTOEMRS_LIST_ONCRM, {
           method: 'POST', // Assuming POST based on other API calls
+           body: formData,
         });
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);

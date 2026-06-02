@@ -330,7 +330,7 @@ const BulkImportDialog = ({ type, onImport, trigger }: BulkImportDialogProps) =>
                             status: row['Status'] || 'active',
                             contacts: contacts.length > 0 ? JSON.stringify(contacts) : null,
                             feedback: feedback.length > 0 ? JSON.stringify(feedback) : null,
-                            onboarding_stage: 'outreach',
+                            onboarding_stage: 'not-contacted',
                             payment_terms: 'net-30',
                             assigned_manager: row['ISR Name'],
                         };

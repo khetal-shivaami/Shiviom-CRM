@@ -186,14 +186,14 @@ const Auth: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="flex items-center justify-end">
+              {/* <div className="flex items-center justify-end">
                 <Link
                   to="/auth/reset"
                   className="text-sm font-medium text-primary hover:underline"
                 >
                   Forgot your password?
                 </Link>
-              </div>
+              </div> */}
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>

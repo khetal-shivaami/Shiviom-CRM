@@ -21,7 +21,6 @@ import { Checkbox } from './ui/checkbox';
 import { ArrowLeft, X, Edit, Plus } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Label } from '@radix-ui/react-label';
-import { checkDomainOfScale } from 'recharts/types/util/ChartUtils';
 
 const identityOptions = [
   { id: 'web-app-developer', label: 'Web App Developer' },
@@ -129,6 +128,8 @@ const feedbackStatusOptions = [
   { value: 'qc-pending', label: 'QC-Pending' },
   { value: 'qc-qualified', label: 'QC-Qualified' },
   { value: 'qc-notqualified', label: 'QC-NotQualified' },
+  { value: 'connected-email', label: 'Connected Email' },
+  { value: 'lead-prospect', label: 'Lead Prospect' },
 ] as const;
 
 const sourceOfLeadOptions = [
@@ -368,7 +369,7 @@ const partnerSchema = z.object({
     contactDesignation: z.string().optional().or(z.literal('')),
     contactNumber: z.string().optional().or(z.literal('')),
     contactEmail: z.string().email('Invalid email address.').optional().or(z.literal('')),
-    contactLinkedinURL: z.string().url({ message: 'Invalid URL' }).optional().or(z.literal('')),
+    contactLinkedinURL: z.string().optional().or(z.literal('')),
   })).optional(),
   interactions: z.array(z.object({
     isrId: z.string().min(1, 'ISR is required.'),
@@ -444,10 +445,14 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [countryCode, setCountryCode] = useState('+91');
   const [products, setProducts] = useState<Array<{ id: string; name: string }>>([]);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
 
-  const form = useForm<PartnerFormData>({
+  const userName = (profile?.first_name || profile?.last_name)
+    ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
+    : user?.email;
+
+    const form = useForm<PartnerFormData>({
     resolver: zodResolver(partnerSchema),
     defaultValues: {
       name: '', email: '', company: '', phone: '', specialization: '', identity: [], paymentTerms: 'net-30', zone: [], stageOwnerId: '', partner_tag: [], partner_type: 'silver', source_of_partner: 'webinar', designation: '', partner_status: undefined, assignedUserId: '', city: undefined, vertical: undefined, contacts: [], interactions: [],
@@ -557,7 +562,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
     }
   };
 
-  const handleAddOrUpdateContact = () => {
+  const handleAddOrUpdateContact = async () => {
     if (!contactData.contactName) {
       toast({ title: 'Error', description: 'Contact name is required.', variant: 'destructive' });
       return;
@@ -570,9 +575,11 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
 
     if (editingContactIndex !== null) {
       contactsFieldArray.update(editingContactIndex, contactData);
+      await logCrmAction('Update Partner Contact', `User "${userName}" updated contact for partner ${form.getValues().name || 'being created'}. Details: ${JSON.stringify(contactData)}`);
       setEditingContactIndex(null);
     } else {
       contactsFieldArray.append(contactData);
+      await logCrmAction('Add Partner Contact', `User "${userName}" added new contact for partner ${form.getValues().name || 'being created'}. Details: ${JSON.stringify(contactData)}`);
     }
 
     setContactData(defaultContactValue);
@@ -592,7 +599,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
     setIsContactFormOpen(true);
   };
 
-  const handleAddOrUpdateInteraction = () => {
+  const handleAddOrUpdateInteraction = async () => {
     if (!interactionData.isrId || !interactionData.contactPerson) {
       toast({ title: 'Error', description: 'ISR and Contact Person are required.', variant: 'destructive' });
       return;
@@ -633,13 +640,31 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
 
     if (editingInteractionIndex !== null) {
       interactionsFieldArray.update(editingInteractionIndex, interactionWithTimestamp);
+      await logCrmAction('Update Partner Interaction', `User "${userName}" updated interaction for partner ${form.getValues().name || 'being created'}. Details: ${JSON.stringify(interactionWithTimestamp)}`);
       setEditingInteractionIndex(null);
     } else {
       interactionsFieldArray.append(interactionWithTimestamp);
+      await logCrmAction('Add Partner Interaction', `User "${userName}" added new interaction for partner ${form.getValues().name || 'being created'}. Details: ${JSON.stringify(interactionWithTimestamp)}`);
     }
 
     setInteractionData(defaultInteractionValue);
     setIsInteractionFormOpen(false);
+  };
+
+  const handleRemoveContact = async (index: number) => {
+    const contact = form.getValues().contacts?.[index];
+    if (contact) {
+      contactsFieldArray.remove(index);
+      await logCrmAction('Remove Partner Contact', `User "${userName}" removed contact from partner ${form.getValues().name || 'being created'}. Details: ${JSON.stringify(contact)}`);
+    }
+  };
+
+  const handleRemoveInteraction = async (index: number) => {
+    const interaction = form.getValues().interactions?.[index];
+    if (interaction) {
+      interactionsFieldArray.remove(index);
+      await logCrmAction('Remove Partner Interaction', `User "${userName}" removed interaction from partner ${form.getValues().name || 'being created'}. Details: ${JSON.stringify(interaction)}`);
+    }
   };
 
   const handleEditInteraction = (index: number) => {
@@ -751,7 +776,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
         description: 'Partner has been added successfully.',
       });
 
-      const logDetails = `Added new partner: ${data.name} (${data.email}).`;
+      const logDetails = `User "${userName}" added new partner: ${data.name} (${data.email}).`;
       await logCrmAction('Add Partner', logDetails);
 
       form.reset();
@@ -1228,7 +1253,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                             <Button type="button" variant="ghost" size="icon" onClick={() => handleEditContact(index)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button type="button" variant="destructive" size="icon" onClick={() => contactsFieldArray.remove(index)}>
+                            <Button type="button" variant="destructive" size="icon" onClick={() => handleRemoveContact(index)}>
                               <X className="h-4 w-4" />
                             </Button>
                           </TableCell>
@@ -1271,7 +1296,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                       </div>
                       <div className="space-y-2">
                         <Label>LinkedIn URL</Label>
-                        <Input type="url" placeholder="https://linkedin.com/in/..." value={contactData.contactLinkedinURL} onChange={(e) => setContactData((d) => ({ ...d, contactLinkedinURL: e.target.value }))} />
+                        <Input placeholder="https://linkedin.com/in/..." value={contactData.contactLinkedinURL} onChange={(e) => setContactData((d) => ({ ...d, contactLinkedinURL: e.target.value }))} />
                       </div>
                       <div className="flex items-end gap-2 md:col-start-3">
                         <Button type="button" onClick={handleAddOrUpdateContact}>
@@ -1336,7 +1361,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                             <Button type="button" variant="ghost" size="icon" onClick={() => handleEditInteraction(index)}>
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button type="button" variant="destructive" size="icon" onClick={() => interactionsFieldArray.remove(index)}>
+                            <Button type="button" variant="destructive" size="icon" onClick={() => handleRemoveInteraction(index)}>
                               <X className="h-4 w-4" />
                             </Button>
                           </TableCell>

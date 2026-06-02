@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -25,6 +25,7 @@ import BulkImportDialog from './BulkImportDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { API_ENDPOINTS } from '@/config/api';
 import { cn } from '@/lib/utils';
+import PartnerListModal from './PartnerListModal';
 import { AddPartnerDomainDialog } from './AddPartnerDomainDialog';
 import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfDay, endOfDay } from 'date-fns';
 import {
@@ -42,6 +43,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const identityOptions = [
   { id: 'web-app-developer', label: 'Web App Developer' },
@@ -218,6 +225,17 @@ interface EnhancedPartner extends Partner {
   vertical?: string;
   assigned_manager?: string;
   assigned_user_id?: string;
+  assignee_date?: Date;
+}
+
+interface StatCardData {
+  title: string;
+  value: number | string;
+  color: string;
+  icon: React.ElementType;
+  partners: EnhancedPartner[];
+  isClickable: boolean;
+  stage?: OnboardingStage | 'all';
 }
 
 const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps) => {
@@ -241,6 +259,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   const [partnerTagsFilter, setPartnerTagsFilter] = useState('all');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [presetDateRange, setPresetDateRange] = useState('all');
+  const [dateFilterField, setDateFilterField] = useState('createdAt');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
@@ -252,6 +271,9 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   const [isBulkAssignDialogOpen, setIsBulkAssignDialogOpen] = useState(false);
   const recordsPerPage = 20;
   const [isShareAccessOpen, setIsShareAccessOpen] = useState(false);
+  const [isPartnerListModalOpen, setIsPartnerListModalOpen] = useState(false);
+  const [modalPartners, setModalPartners] = useState<EnhancedPartner[]>([]);
+  const [modalTitle, setModalTitle] = useState('');
   const [sharePartnerPopoverOpen, setSharePartnerPopoverOpen] = useState(false);
   const [selectedPartnerForAccess, setSelectedPartnerForAccess] = useState<string | null>(null);
   const [isSendingAccess, setIsSendingAccess] = useState(false);
@@ -274,6 +296,32 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     .filter(Boolean)
     .join(' ')
     .trim();
+
+  const getTodaysInteractionsCount = (interactionsValue: any): number => {
+    const interactions = parseInteractionsSafe(interactionsValue);
+    if (!interactions || interactions.length === 0) {
+        return 0;
+    }
+
+    const todayString = new Date().toDateString();
+
+    return interactions.filter(interaction => {
+        return interaction.feedback_timestamp && new Date(interaction.feedback_timestamp).toDateString() === todayString;
+    }).length;
+  };
+
+  const handleStatClick = (title: string, partners: EnhancedPartner[]) => {
+    if (!partners || partners.length === 0) {
+      toast({
+        title: 'No Partners',
+        description: `There are no partners in the "${title}" category.`,
+      });
+      return;
+    }
+    setModalTitle(title);
+    setModalPartners(partners);
+    setIsPartnerListModalOpen(true);
+  };
 
   useEffect(() => {
     const fetchAssignableUsers = async () => {
@@ -313,6 +361,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
   const isSalesUser = profile?.role && ['isr', 'fsr', 'bde'].includes(profile.role.toLowerCase());
 
   const stageConfig = {
+    'not-contacted': { title: 'Not Contacted', icon: Users, color: 'bg-black-500' },
     'outreach': { title: 'Outreach', icon: Users, color: 'bg-blue-500' },
     'product-overview': { title: 'Product Overview', icon: FileText, color: 'bg-purple-500' },
     'partner-program': { title: 'Partner Program', icon: Handshake, color: 'bg-green-500' },
@@ -324,7 +373,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
 
   // Generate mock onboarding data with 7-stage system
   const generateMockOnboardingData = (partner: Partner, dbStage?: OnboardingStage): PartnerOnboardingData => {
-    const stages: OnboardingStage[] = ['outreach', 'product-overview', 'partner-program', 'portal-activation', 'agreement', 'kyc', 'onboarded']; // Corrected order
+    const stages: OnboardingStage[] = ['not-contacted', 'outreach', 'product-overview', 'partner-program', 'portal-activation', 'agreement', 'kyc', 'onboarded']; // Corrected order
 
     // Use the database stage if provided and valid, otherwise pick a random one as a fallback.
     const currentStage = dbStage && stages.includes(dbStage)
@@ -409,7 +458,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
         payment_terms: p.paymentTerms,
         zone: p.zone && p.zone.length > 0 ? JSON.stringify(p.zone) : null,
         partner_tag: p.partner_tag && p.partner_tag.length > 0 ? JSON.stringify(p.partner_tag) : null,
-        onboarding_stage: 'outreach', // Default for new partners in onboarding
+        onboarding_stage: 'not-contacted', // Default for new partners in onboarding
       }));
 
       const { error } = await supabase.from('partners').insert(partnersToInsert as any);
@@ -496,6 +545,21 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     return [];
   };
 
+  const parseContactsSafe = (contacts: any): { contactNumber?: string }[] => {
+    if (Array.isArray(contacts)) {
+      return contacts;
+    }
+    if (typeof contacts === 'string' && contacts.trim()) {
+      try {
+        const parsed = JSON.parse(contacts);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  };
+
   const getLatestInteractionFeedbackStatus = (interactionsValue: any): string => {
     const interactions = parseInteractionsSafe(interactionsValue);
 
@@ -509,7 +573,36 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
 
     return latestInteraction?.feedback_status || '';
   };
+  const getLastInteractionDetails = (partner: EnhancedPartner) => {
+    const interactions = parseInteractionsSafe(partner.interactions);
 
+    if (!interactions || interactions.length === 0) {
+      return <p className="text-sm">No recent interactions.</p>;
+    }
+
+    const sortedInteractions = [...interactions].sort((a, b) => {
+      const dateA = a.feedback_timestamp ? new Date(a.feedback_timestamp).getTime() : 0;
+      const dateB = b.feedback_timestamp ? new Date(b.feedback_timestamp).getTime() : 0;
+      return dateB - dateA; // Sort descending
+    });
+
+    const lastInteraction = sortedInteractions[0];
+
+    return (
+      <div className="space-y-1 text-sm">
+        <p className="font-semibold">Last Interaction:</p>
+        {lastInteraction.feedback_timestamp && (
+          <p><strong>Date:</strong> {new Date(lastInteraction.feedback_timestamp).toLocaleString()}</p>
+        )}
+        {lastInteraction.feedback_status && (
+          <p><strong>Status:</strong> {lastInteraction.feedback_status}</p>
+        )}
+        {lastInteraction.feedback_notes && (
+          <p><strong>Notes:</strong> {lastInteraction.feedback_notes}</p>
+        )}
+      </div>
+    );
+  };
   const fetchPartners = async () => {
     setIsLoading(true);
     try {
@@ -580,6 +673,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           vertical: p.vertical,
           assigned_manager: p.assigned_manager,
           assigned_user_id: p.assigned_user_id,
+          assignee_date: p.assignee_date ? new Date(p.assignee_date) : undefined,
 
         };
 
@@ -655,7 +749,8 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     zoneFilter,
     partnerTagsFilter,
     dateRange,
-    presetDateRange
+    presetDateRange,
+    dateFilterField
   ]);
 
   useEffect(() => {
@@ -708,8 +803,22 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     setZoneFilter('all');
     setPartnerTagsFilter('all');
     setPresetDateRange('all'); // This will also clear dateRange via its useEffect
+    setDateFilterField('createdAt');
   };
 
+  const getLatestInteractionFeedbackNotes = (interactionsValue: any): string => {
+    const interactions = parseInteractionsSafe(interactionsValue);
+
+    if (!interactions || interactions.length === 0) return '';
+
+    const sortedInteractions = [...interactions]
+      .filter(i => i.feedback_timestamp)
+      .sort((a, b) => new Date(b.feedback_timestamp).getTime() - new Date(a.feedback_timestamp).getTime());
+
+    if (sortedInteractions.length === 0) return '';
+
+    return sortedInteractions[0]?.feedback_notes || '';
+  };
   const escapeCsvValue = (value: unknown) => {
     if (value === null || value === undefined) return '""';
     const stringValue = Array.isArray(value)
@@ -771,7 +880,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           partner.createdAt ? new Date(partner.createdAt).toLocaleString() : '',
           typeof partner.contacts === 'object' ? JSON.stringify(partner.contacts) : partner.contacts || '',
           typeof partner.interactions === 'object' ? JSON.stringify(partner.interactions) : partner.interactions || '',
-          typeof partner.feedback === 'object' ? JSON.stringify(partner.feedback) : partner.feedback || '',
+          getLatestInteractionFeedbackNotes(partner.interactions),
         ];
       });
 
@@ -953,9 +1062,16 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       return false;
     }
 
-    const matchesSearch = partner.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      partner.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      partner.company.toLowerCase().includes(searchTerm.toLowerCase());
+    const partnerContacts = parseContactsSafe(partner.contacts);
+    const matchesContactPhone = partnerContacts.some(
+      contact => contact.contactNumber && contact.contactNumber.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const matchesSearch = (partner.name && partner.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (partner.email && partner.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (partner.company && partner.company.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (partner.phone && partner.phone.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      matchesContactPhone;
     // If a status filter is active, don't filter by stage unless a specific stage is also selected.
     const matchesStage = (statusFilter !== 'all' && stageFilter === 'all') || stageFilter === 'all' || partner.onboarding.currentStage === stageFilter;
     const matchesOwner = ownerFilter === 'all' ||
@@ -966,18 +1082,44 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
 
     let matchesDate = true;
     if (dateRange?.from) {
-      const partnerDate = new Date(partner.createdAt);
-      const toDate = dateRange.to ? new Date(dateRange.to) : new Date();
-      // Set time to end of day for 'to' date to include all records on that day
-      toDate.setHours(23, 59, 59, 999);
+      const fromDate = startOfDay(dateRange.from);
+      const toDate = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
 
-      matchesDate = partnerDate >= dateRange.from && partnerDate <= toDate;
+      if (dateFilterField === 'createdAt') {
+        matchesDate = partner.createdAt && new Date(partner.createdAt) >= fromDate && new Date(partner.createdAt) <= toDate;
+      } else if (dateFilterField === 'assignee_date') {
+        matchesDate = partner.assignee_date && new Date(partner.assignee_date) >= fromDate && new Date(partner.assignee_date) <= toDate;
+      } else if (dateFilterField === 'followup_date') {
+        const interactions = parseInteractionsSafe(partner.interactions);
+        matchesDate = interactions.some(interaction => {
+          const followupDate = interaction.followup_date ? new Date(interaction.followup_date) : null;
+          return followupDate && followupDate >= fromDate && followupDate <= toDate;
+        });
+      } else if (dateFilterField === 'feedback_date') {
+        const interactions = parseInteractionsSafe(partner.interactions);
+        matchesDate = interactions.some(interaction => {
+          const feedbackTimestamp = interaction.feedback_timestamp ? new Date(interaction.feedback_timestamp) : null;
+          return feedbackTimestamp && feedbackTimestamp >= fromDate && feedbackTimestamp <= toDate;
+        });
+      } else {
+        // If we are filtering by a date field and it doesn't exist, it's not a match.
+        matchesDate = false;
+      }
     }
 
-    const partnerFeedbackStatus = (partner.feedback_status || '').toLowerCase(); // Latest interaction feedback_status
-    const selectedStatus = statusFilter.toLowerCase(); // UI filter value
 
-    const matchesStatus = statusFilter === 'all' || partnerFeedbackStatus === selectedStatus;
+    let matchesStatus;
+    if (statusFilter === 'all') {
+      matchesStatus = true;
+    } else if (statusFilter === 'blank') {
+      const hasContacts = parseJsonSafe(partner.contacts).length > 0;
+      const hasInteractions = parseInteractionsSafe(partner.interactions).length > 0;
+      matchesStatus = !hasContacts && !hasInteractions;
+    } else {
+      const partnerFeedbackStatus = (partner.feedback_status || '').toLowerCase();
+      const selectedStatus = statusFilter.toLowerCase();
+      matchesStatus = partnerFeedbackStatus === selectedStatus;
+    }
     const matchesSpecialization = specializationFilter === 'all' || (partner.specialization || '') === specializationFilter;
     const matchesPartnerProgram = partnerProgramFilter === 'all' || ((partner as any).partner_program ?? (partner as any).partnerProgram ?? '') === partnerProgramFilter;
     const matchesPaymentTerms = paymentTermsFilter === 'all' || (partner.paymentTerms || '') === paymentTermsFilter;
@@ -1006,6 +1148,12 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       matchesZone &&
       matchesPartnerTags;
   });
+
+  const totalTodaysAttempts = useMemo(() => {
+    return filteredPartners.reduce((acc, partner) => {
+      return acc + getTodaysInteractionsCount(partner.interactions);
+    }, 0);
+  }, [filteredPartners]);
 
   // Pagination logic
   const totalPages = Math.ceil(filteredPartners.length / recordsPerPage);
@@ -1047,52 +1195,104 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       title: 'Total Partners',
       value: partnersData.length,
       color: 'text-blue-600',
-      icon: Users
+      icon: Users,
+      partners: partnersData,
+      isClickable: true,
+      stage: 'all',
+    },
+    {
+      title: "Today's Assigned",
+      value: partnersData.filter(p => { // This will be filtered by logged-in user
+        if (!p.assignee_date) return false;
+        const assigneeDate = new Date(p.assignee_date);
+        const today = new Date();
+        const isToday = assigneeDate.getDate() === today.getDate() && assigneeDate.getMonth() === today.getMonth() && assigneeDate.getFullYear() === today.getFullYear();
+        return isToday && p.assigned_manager === loggedInUserName;
+      }).length,
+      color: 'text-teal-600',
+      icon: UserCheck,
+      partners: partnersData.filter(p => {
+        if (!p.assignee_date) return false;
+        const assigneeDate = new Date(p.assignee_date);
+        const today = new Date();
+        const isToday = assigneeDate.getDate() === today.getDate() && assigneeDate.getMonth() === today.getMonth() && assigneeDate.getFullYear() === today.getFullYear();
+        return isToday && p.assigned_manager === loggedInUserName;
+      }),
+      isClickable: true,
+    },
+    {
+      title: 'Not Contacted',
+      value: partnersData.filter(p => p.onboarding.currentStage === 'not-contacted').length,
+      color: 'text-gray-600',
+      icon: Users,
+      partners: partnersData.filter(p => p.onboarding.currentStage === 'not-contacted'),
+      isClickable: true,
+      stage: 'not-contacted',
     },
     {
       title: 'Outreach',
       value: partnersData.filter(p => p.onboarding.currentStage === 'outreach').length,
       color: 'text-blue-600',
-      icon: Users
+      icon: Users,
+      partners: partnersData.filter(p => p.onboarding.currentStage === 'outreach'),
+      isClickable: true,
+      stage: 'outreach',
     },
     {
       title: 'Product Overview',
       value: partnersData.filter(p => p.onboarding.currentStage === 'product-overview').length,
       color: 'text-purple-600',
-      icon: FileText
+      icon: FileText,
+      partners: partnersData.filter(p => p.onboarding.currentStage === 'product-overview'),
+      isClickable: true,
+      stage: 'product-overview',
     },
     {
       title: 'Partner Program',
       value: partnersData.filter(p => p.onboarding.currentStage === 'partner-program').length,
       color: 'text-green-600',
-      icon: Handshake
+      icon: Handshake,
+      partners: partnersData.filter(p => p.onboarding.currentStage === 'partner-program'),
+      isClickable: true,
+      stage: 'partner-program',
     },
     {
       title: 'Portal Activation',
       value: partnersData.filter(p => p.onboarding.currentStage === 'portal-activation').length,
       color: 'text-cyan-600',
-      icon: KeyRound
+      icon: KeyRound,
+      partners: partnersData.filter(p => p.onboarding.currentStage === 'portal-activation'),
+      isClickable: true,
+      stage: 'portal-activation',
     },
     {
       title: 'Agreement',
       value: partnersData.filter(p => p.onboarding.currentStage === 'agreement').length,
       color: 'text-orange-600',
-      icon: PenTool
+      icon: PenTool,
+      partners: partnersData.filter(p => p.onboarding.currentStage === 'agreement'),
+      isClickable: true,
+      stage: 'agreement',
     },
     {
       title: 'KYC',
       value: partnersData.filter(p => p.onboarding.currentStage === 'kyc').length,
       color: 'text-yellow-600',
-      icon: Shield
+      icon: Shield,
+      partners: partnersData.filter(p => p.onboarding.currentStage === 'kyc'),
+      isClickable: true,
+      stage: 'kyc',
     },
-
     {
       title: 'Onboarded',
       value: partnersData.filter(p => p.onboarding.currentStage === 'onboarded').length,
       color: 'text-emerald-600',
-      icon: Trophy
+      icon: Trophy,
+      partners: partnersData.filter(p => p.onboarding.currentStage === 'onboarded'),
+      isClickable: true,
+      stage: 'onboarded',
     }
-  ];
+  ] as StatCardData[];
 
   const avgProgress = filteredPartners.length > 0
     ? Math.round(filteredPartners.reduce((sum, p) => sum + p.onboarding.overallProgress, 0) / filteredPartners.length)
@@ -1205,7 +1405,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       await logCrmAction("Share Portal Access", logDetails);
 
       // Update partner stage to 'portal-activation' if not already there or past it
-      const stageOrder: OnboardingStage[] = ['outreach', 'product-overview', 'partner-program', 'portal-activation', 'agreement', 'kyc', 'onboarded'];
+      const stageOrder: OnboardingStage[] = ['not-contacted','outreach', 'product-overview', 'partner-program', 'portal-activation', 'agreement', 'kyc', 'onboarded'];
       const currentStageIndex = stageOrder.indexOf(partner.onboarding.currentStage);
       const portalActivationStageIndex = stageOrder.indexOf('portal-activation');
 
@@ -1318,11 +1518,25 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
         />
       )} */}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-9 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-11 gap-4">
         {statsData.map((stat) => {
           const IconComponent = stat.icon;
           return (
-            <Card key={stat.title}>
+            <Card
+              key={stat.title}
+              onClick={() => {
+                if (stat.title === "Today's Assigned") {
+                  setDateFilterField('assignee_date');
+                  setPresetDateRange('today');
+                  setAssignedManagerFilter(loggedInUserName);
+                } else if (stat.stage) {
+                  setStageFilter(stat.stage as OnboardingStage | 'all');
+                 } else if (stat.isClickable && stat.partners) {
+                  handleStatClick(stat.title, stat.partners);
+                }
+              }}
+              className={cn(stat.isClickable && 'cursor-pointer hover:shadow-md transition-shadow')}
+            >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
                 <IconComponent className="h-4 w-4 text-muted-foreground" />
@@ -1351,7 +1565,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search partners..."
+              placeholder="Search by name, email, company, phone, or contact phone..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8 pr-8"
@@ -1376,6 +1590,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Stages</SelectItem>
+                  <SelectItem value="not-contacted">Not Contacted</SelectItem>
                   <SelectItem value="outreach">Outreach</SelectItem>
                   <SelectItem value="product-overview">Product Overview</SelectItem>
                   <SelectItem value="partner-program">Partner Program</SelectItem>
@@ -1421,6 +1636,7 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="blank">Blank</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="invalid">Invalid</SelectItem>
                   <SelectItem value="not-interested">Not Interested</SelectItem>
@@ -1440,6 +1656,9 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                   <SelectItem value="qc-pending">QC-Pending</SelectItem>
                   <SelectItem value="qc-qualified">QC-Qualified</SelectItem>
                   <SelectItem value="qc-notqualified">QC-NotQualified</SelectItem>
+                  <SelectItem value="connected-email">Connected Email</SelectItem>
+                  <SelectItem value="lead-prospect">Lead Prospect</SelectItem>
+                    
                 </SelectContent>
               </Select>
 
@@ -1604,6 +1823,18 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                   </SelectContent>
                 </Select>
 
+                <Select value={dateFilterField} onValueChange={(value) => setDateFilterField(value as 'createdAt' | 'assignee_date')}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Date Field" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="createdAt">Creation Date</SelectItem>
+                    <SelectItem value="assignee_date">Assigned Date</SelectItem>
+                    <SelectItem value="feedback_date">Feedback Date (Interactions)</SelectItem>
+                    <SelectItem value="followup_date">Follow Up Date (Interactions)</SelectItem>
+                  </SelectContent>
+                </Select>
+
                 {presetDateRange === 'custom' && (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1646,9 +1877,12 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
         <CardContent>
           <div className="pb-4">
             {paginationControls}
-            <p className="text-red-500 text-center text-bold">
-              Note :- Non Highlighted records represents the unattempted data.
-            </p>
+            <div className="text-center mt-2">
+              <p className="text-lg font-semibold">Today's Total Attempts: {totalTodaysAttempts}</p>
+              <p className="text-red-500 text-center text-bold">
+                Note :- Non Highlighted records represents the unattempted data.
+              </p>
+            </div>
           </div>
           <Table>
             <TableHeader>
@@ -1661,10 +1895,11 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                   />
                 </TableHead>
                 <TableHead>Partner</TableHead>
-                <TableHead>Current Stage</TableHead>
+                {/* <TableHead>Current Stage</TableHead> */}
                 <TableHead>Progress</TableHead>
                 <TableHead>Stage Owner</TableHead>
                 <TableHead>Created Date</TableHead>
+                <TableHead>Today's No. of Attempt</TableHead>
                 <TableHead>Last Activity</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -1672,13 +1907,14 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center">
+                  <TableCell colSpan={9} className="h-24 text-center">
                     Loading partners...
                   </TableCell>
                 </TableRow>
               ) : currentRecords.map((partner) => {
                 const currentStageData = partner.onboarding.stages[partner.onboarding.currentStage];
                 const stageConfig = {
+                  'not-contacted': { title: 'Not Contacted', icon: Users },
                   'outreach': { title: 'Outreach', icon: Users },
                   'product-overview': { title: 'Product Overview', icon: FileText },
                   'partner-program': { title: 'Partner Program', icon: Handshake },
@@ -1687,15 +1923,16 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                   'kyc': { title: 'KYC', icon: Shield },
                   'onboarded': { title: 'Onboarded', icon: Trophy }
                 };
-                const hasContacts = parseJsonSafe(partner.contacts).length > 0;
+                // const hasContacts = parseJsonSafe(partner.contacts).length > 0;
                 const hasInteractions = parseInteractionsSafe(partner.interactions).length > 0;
+                const todaysAttempts = getTodaysInteractionsCount(partner.interactions);
 
                 return (
                   <TableRow
                     key={partner.id}
                     className={cn(
                       "cursor-pointer hover:bg-muted/50",
-                      (hasContacts || hasInteractions) && "bg-blue-50 hover:bg-blue-100/80"
+                      (hasInteractions) && "bg-blue-50 hover:bg-blue-100/80"
                     )}
                     onClick={() => setSelectedPartner(partner)}
                   >
@@ -1706,28 +1943,37 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                       />
                     </TableCell>
                     <TableCell>
-                      <div>
-                        <div className="font-medium">{partner.name}</div>
-                        <div className="text-sm text-muted-foreground">{partner.company}</div>
-                        <div className="text-xs text-muted-foreground">{partner.email}</div>
-                      </div>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <div className="font-medium">{partner.name}</div>
+                              <div className="text-sm text-muted-foreground">{partner.company}</div>
+                              <div className="text-xs text-muted-foreground">{partner.email}</div>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            {getLastInteractionDetails(partner)}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </TableCell>
-                    <TableCell>
+                    {/* <TableCell>
                       <div className="flex items-center space-x-2">
-                        {getStageIcon(partner.onboarding.currentStage)}
+                      {getStageIcon(partner.onboarding.currentStage || 'not-contacted')}
                         <div>
                           <div className="font-medium text-sm">
                             {stageConfig[partner.onboarding.currentStage].title}
                           </div>
-                          {/* <Badge 
+                          <Badge 
                               variant="outline" 
                               className={`text-xs ${getStatusColor(currentStageData.status)} text-white border-0`}
                             >
                               {currentStageData.status.replace('-', ' ')}
-                            </Badge> */}
+                            </Badge>
                         </div>
                       </div>
-                    </TableCell>
+                    </TableCell> */}
                     <TableCell>
                       <div className="space-y-1">
                         <div className="text-sm font-medium">{partner.onboarding.overallProgress}%</div>
@@ -1746,6 +1992,9 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
                       <div className="text-sm">
                         {partner.createdAt.toLocaleDateString()}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {todaysAttempts}
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
@@ -1797,6 +2046,12 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
       <AddPartnerDomainDialog
         open={isAddDomainModalOpen}
         onOpenChange={setIsAddDomainModalOpen}
+      />
+      <PartnerListModal
+        isOpen={isPartnerListModalOpen}
+        onClose={() => setIsPartnerListModalOpen(false)}
+        partners={modalPartners}
+        stage={modalTitle}
       />
       <Dialog open={isShareAccessOpen} onOpenChange={setIsShareAccessOpen}>
         <BulkAssignUserDialog
@@ -2068,7 +2323,10 @@ const BulkAssignUserDialog = ({ isOpen, onOpenChange, partnerIds, users, onSucce
     try {
       const { error } = await supabase
         .from('partners')
-        .update({ assigned_manager: selectedUser.name })
+        .update({
+          assigned_manager: selectedUser.name,
+          assignee_date: new Date().toISOString(),
+        })
         .in('id', partnerIds);
 
       if (error) throw error;
@@ -2179,6 +2437,8 @@ const AssignUserDialog = ({ partner, assigeeUsers, onSuccess, children }: Assign
           // assigned_user_ids: [selectedUser.id],
           // assigned_user_id: selectedUser.id,
           assigned_manager: selectedUser.name,
+          assignee_date: new Date().toISOString(),
+          stage_owner: selectedUser.id,
         })
         .eq('id', partner.id);
 

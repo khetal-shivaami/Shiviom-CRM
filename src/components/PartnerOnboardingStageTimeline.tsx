@@ -13,6 +13,12 @@ interface PartnerOnboardingStageTimelineProps {
 }
 
 const stageConfig = {
+  'not-contacted': {
+    title: 'Not Contacted',
+    description: 'Initial state before any outreach',
+    icon: Users,
+    color: 'hsl(var(--muted))'
+  },
   'outreach': {
     title: 'Outreach',
     description: 'Initial contact and lead qualification',
@@ -57,7 +63,7 @@ const stageConfig = {
   }
 } as const;
 
-const stageOrder: OnboardingStage[] = ['outreach', 'product-overview', 'partner-program', 'portal-activation', 'agreement', 'kyc', 'onboarded'];
+const stageOrder: OnboardingStage[] = ['not-contacted', 'outreach', 'product-overview', 'partner-program', 'portal-activation', 'agreement', 'kyc', 'onboarded'];
 
 const PartnerOnboardingStageTimeline = ({ stages, currentStage, stageOwnerId, users }: PartnerOnboardingStageTimelineProps) => {
   const currentStageData = stages[currentStage];

@@ -14,6 +14,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,8 +36,8 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  SelectValue
+} from "@/components/ui/select";
 
 type VerificationStatus = 'pending' | 'accepted' | 'rejected';
 
@@ -224,7 +229,28 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
   const [partnerSearchTerm, setPartnerSearchTerm] = useState('');
   const [isEditPartnerDialogOpen, setIsEditPartnerDialogOpen] = useState(false);
 
+  // State for adding contacts
+  const [isContactFormOpen, setIsContactFormOpen] = useState(false);
+  const [newContact, setNewContact] = useState({
+    contactName: '',
+    contactDesignation: '',
+    contactNumber: '',
+    contactEmail: '',
+    contactLinkedinURL: '',
+  });
+  const [isSubmittingContact, setIsSubmittingContact] = useState(false);
 
+
+
+  // State for adding interactions
+  const [isInteractionFormOpen, setIsInteractionFormOpen] = useState(false);
+  const [newInteraction, setNewInteraction] = useState({
+    isrId: '', contactPerson: '', productName: '', designation: '', contactNumber: '', contactEmail: '',
+    status: 'presentation' as 'freshfollowup-connected' | 'followup-not-connected' | 'presentation' | 'feedback',
+    source_of_lead: '', followup_date: '', feedback_status: '', feedback_notes: '', feedback_timestamp: '',
+  });
+  const [isSubmittingInteraction, setIsSubmittingInteraction] = useState(false);
+  const [products, setProducts] = useState<Array<{ id: string; name: string }>>([]);
   // State for Create Task
   const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
@@ -237,6 +263,45 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
     dueDate: '',
     assignedTo: ''
   });
+
+  const feedbackStatusOptions = [
+    { value: 'call-back', label: 'Call Back' },
+    { value: 'email', label: 'Email' },
+    { value: 'followup', label: 'Followup' },
+    { value: 'interested', label: 'Interested' },
+    { value: 'invalid', label: 'Invalid' },
+    { value: 'nc', label: 'NC' },
+    { value: 'not-interested', label: 'Not Interested' },
+    { value: 'price-challenge', label: 'Price challenge' },
+    { value: 'whatsapp', label: 'Whatsapp' },
+    { value: 'linkedin', label: 'Linkedin' },
+    { value: 'freshfollowup-connected', label: 'Fresh Follow-up - Connected' },
+    { value: 'followup-not-connected', label: 'Follow-up - Not Connected' },
+    { value: 'qc', label: 'QC' },
+    { value: 'qc-pending', label: 'QC-Pending' },
+    { value: 'qc-qualified', label: 'QC-Qualified' },
+    { value: 'qc-notqualified', label: 'QC-NotQualified' },
+  ] as const;
+
+  const sourceOfLeadOptions = [
+    { value: 'website', label: 'Website' },
+    { value: 'linkedin', label: 'LinkedIn' },
+    { value: 'referral', label: 'Referral' },
+    { value: 'whatsapp', label: 'WhatsApp' },
+    { value: 'email', label: 'Email' },
+    { value: 'event', label: 'Event' },
+    { value: 'other', label: 'Other' },
+    { value: 'cold-call', label: 'Cold Call' },
+  ] as const;
+
+  const interactionStatusOptions = [
+    { value: 'freshfollowup-connected', label: 'Fresh Follow-up - Connected' },
+    { value: 'followup-not-connected', label: 'Follow-up - Not Connected' },
+    { value: 'presentation', label: 'Presentation' },
+    { value: 'feedback', label: 'Feedback' },
+  ] as const;
+
+  const followupFeedbackStatuses = ['freshfollowup-connected', 'followup-not-connected', 'followup'] as const;
 
   const resetNewTaskForm = () => {
     setNewTask({
@@ -370,6 +435,48 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
     }
   };
 
+
+
+  const handleAddContact = async () => {
+    if (!newContact.contactName && !newContact.contactEmail && !newContact.contactNumber) {
+      toast({ title: "Incomplete Contact", description: "Please provide at least a name, email, or number.", variant: "destructive" });
+      return;
+    }
+    if (newContact.contactEmail && !/^\S+@\S+\.\S+$/.test(newContact.contactEmail)) {
+      toast({ title: "Invalid Email", description: "Please provide a valid email address.", variant: "destructive" });
+      return;
+    }
+
+    setIsSubmittingContact(true);
+
+    const currentContacts = Array.isArray(partnerState.contacts)
+      ? partnerState.contacts
+      : (partnerState.contacts && typeof partnerState.contacts === 'string' ? JSON.parse(partnerState.contacts) : []);
+
+    const updatedContacts = [...currentContacts, newContact];
+
+    try {
+      const { error } = await supabase
+        .from('partners')
+        .update({ contacts: updatedContacts })
+        .eq('id', partnerState.id);
+
+      if (error) throw error;
+
+      // Update local state to reflect change immediately
+      setPartnerState(prev => ({ ...prev, contacts: updatedContacts as any }));
+
+      toast({ title: "Contact Added", description: "The new contact has been saved." });
+      setNewContact({ contactName: '', contactDesignation: '', contactNumber: '', contactEmail: '', contactLinkedinURL: '' });
+      setIsContactFormOpen(false);
+      await logCrmAction("Add Partner Contact", `Added new contact "${newContact.contactName}" for partner ${partner.name}.`);
+    } catch (error: any) {
+      toast({ title: "Error Adding Contact", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSubmittingContact(false);
+    }
+  };
+
   const logCrmAction = async (actiontype: string, details: string) => {
     if (!user?.id) {
       console.error("User ID not available for logging CRM action.");
@@ -397,7 +504,51 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
     }
   };
 
+  const handleAddInteraction = async () => {
+    if (!newInteraction.contactPerson || !newInteraction.isrId) {
+      toast({ title: "Incomplete Interaction", description: "Please select an ISR and a Contact Person.", variant: "destructive" });
+      return;
+    }
 
+    setIsSubmittingInteraction(true);
+
+    let interactionToSave = { ...newInteraction };
+
+    if (interactionToSave.feedback_status || interactionToSave.feedback_notes) {
+      interactionToSave.feedback_timestamp = new Date().toISOString();
+    }
+
+    const currentInteractions = Array.isArray(partnerState.interactions)
+      ? partnerState.interactions
+      : (partnerState.interactions && typeof partnerState.interactions === 'string' ? JSON.parse(partnerState.interactions) : []);
+
+    // Prepend the new interaction
+    const updatedInteractions = [interactionToSave, ...currentInteractions];
+
+    try {
+      const { error } = await supabase
+        .from('partners')
+        .update({ interactions: updatedInteractions })
+        .eq('id', partnerState.id);
+
+      if (error) throw error;
+
+      // Update local state to reflect change immediately
+      setPartnerState(prev => ({ ...prev, interactions: updatedInteractions as any }));
+
+      toast({ title: "Interaction Added", description: "The new interaction has been saved." });
+      setNewInteraction({
+        isrId: '', contactPerson: '', productName: '', designation: '', contactNumber: '', contactEmail: '',
+        status: 'presentation', source_of_lead: '', followup_date: '', feedback_status: '', feedback_notes: '', feedback_timestamp: ''
+      });
+      setIsInteractionFormOpen(false);
+      await logCrmAction("Add Partner Interaction", `Added new interaction with "${interactionToSave.contactPerson}" for partner ${partner.name}.`);
+    } catch (error: any) {
+      toast({ title: "Error Adding Interaction", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSubmittingInteraction(false);
+    }
+  };
   // Generate mock onboarding data based on the 6-stage system
   const mockOnboardingData = {
     currentStage: 'kyc' as const,
@@ -492,11 +643,11 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
   const onboardingData = partnerState.onboarding || mockOnboardingData;
 
   const additionalContacts = useMemo(() => {
-    if (typeof partner.contacts === 'string') {
-      try { return JSON.parse(partner.contacts); } catch (e) { return []; }
+    if (typeof partnerState.contacts === 'string') {
+      try { return JSON.parse(partnerState.contacts); } catch (e) { return []; }
     }
-    return Array.isArray(partner.contacts) ? partner.contacts : [];
-  }, [partner.contacts]);
+    return Array.isArray(partnerState.contacts) ? partnerState.contacts : [];
+  }, [partnerState.contacts]);
 
   const interactions = useMemo(() => {
     let parsedInteractions = [];
@@ -518,6 +669,24 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
     return parsedInteractions;
   }, [partner.interactions]);
 
+  useEffect(() => {
+    const fetchProducts = async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name')
+        .not('portal_prod_id', 'is', null)
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching products:', error);
+        return;
+      }
+
+      setProducts((data || []).filter((item): item is { id: string; name: string } => !!item?.id && !!item?.name));
+    };
+
+    fetchProducts();
+  }, []);
 
   useEffect(() => {
     console.log("Partner details:", partner);
@@ -1503,6 +1672,109 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                   ) : (
                     <p className="text-sm text-muted-foreground text-center py-4">No customers found for this partner.</p>
                   )}
+                  <Collapsible open={isInteractionFormOpen} onOpenChange={setIsInteractionFormOpen} className="mt-4">
+                    <CollapsibleTrigger asChild>
+                      {/* <Button type="button" variant="outline" onClick={() => setIsInteractionFormOpen(!isInteractionFormOpen)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Interaction
+                      </Button> */}
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border p-4 rounded-md">
+                        <div className="space-y-2">
+                          <Label>ISR</Label>
+                          <Select value={newInteraction.isrId} onValueChange={value => setNewInteraction(d => ({ ...d, isrId: value }))}>
+                            <SelectTrigger><SelectValue placeholder="Select ISR" /></SelectTrigger>
+                            <SelectContent>
+                              {users.filter(u => ['isr', 'fsr', 'bde'].includes(u.role)).map(user => (
+                                <SelectItem key={user.id} value={user.id}>{user.name}-{user.role.toLocaleUpperCase()}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Contact Person</Label>
+                          <Select
+                            value={newInteraction.contactPerson}
+                            onValueChange={value => {
+                              const selectedContact = additionalContacts.find((contact: any) => contact.contactName === value);
+                              setNewInteraction(d => ({
+                                ...d,
+                                contactPerson: value,
+                                designation: selectedContact?.contactDesignation || '',
+                                contactNumber: selectedContact?.contactNumber || '',
+                                contactEmail: selectedContact?.contactEmail || '',
+                              }));
+                            }}
+                          >
+                            <SelectTrigger><SelectValue placeholder="Select contact" /></SelectTrigger>
+                            <SelectContent>
+                              {additionalContacts.map((contact: any, index: number) => (
+                                <SelectItem key={`${contact.contactName}-${index}`} value={contact.contactName}>
+                                  {contact.contactName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Product</Label>
+                          <Select value={newInteraction.productName} onValueChange={value => setNewInteraction(d => ({ ...d, productName: value }))}>
+                            <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
+                            <SelectContent>
+                              {products.map(product => (
+                                <SelectItem key={product.id} value={product.name}>{product.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Source of Lead</Label>
+                          <Select value={newInteraction.source_of_lead} onValueChange={value => setNewInteraction(d => ({ ...d, source_of_lead: value }))}>
+                            <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                            <SelectContent>
+                              {sourceOfLeadOptions.map(option => (
+                                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Feedback Status</Label>
+                          <Select
+                            value={newInteraction.feedback_status}
+                            onValueChange={value =>
+                              setNewInteraction(d => ({
+                                ...d,
+                                feedback_status: value,
+                                followup_date: followupFeedbackStatuses.includes(value as any) ? d.followup_date : '',
+                              }))
+                            }
+                          >
+                            <SelectTrigger><SelectValue placeholder="Select feedback" /></SelectTrigger>
+                            <SelectContent>
+                              {feedbackStatusOptions.map(option => (
+                                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {followupFeedbackStatuses.includes(newInteraction.feedback_status as any) && (
+                          <div className="space-y-2">
+                            <Label>Follow-up Date</Label>
+                            <Input type="date" value={newInteraction.followup_date} onChange={e => setNewInteraction(d => ({ ...d, followup_date: e.target.value }))} />
+                          </div>
+                        )}
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Feedback Notes</Label>
+                          <Textarea placeholder="Enter feedback notes" value={newInteraction.feedback_notes} onChange={e => setNewInteraction(d => ({ ...d, feedback_notes: e.target.value }))} />
+                        </div>
+                        <div className="flex items-end gap-2 md:col-span-4 justify-end">
+                          <Button type="button" onClick={handleAddInteraction} disabled={isSubmittingInteraction}>{isSubmittingInteraction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Add Interaction</Button>
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -1666,6 +1938,41 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                   ) : (
                     <p className="text-muted-foreground text-center py-4">No additional contacts found.</p>
                   )}
+                  <Collapsible open={isContactFormOpen} onOpenChange={setIsContactFormOpen} className="mt-4">
+                    <CollapsibleTrigger asChild>
+                      <Button type="button" variant="outline" onClick={() => setIsContactFormOpen(!isContactFormOpen)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Contact
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border p-4 rounded-md">
+                        <div className="space-y-2">
+                          <Label>Contact Name</Label>
+                          <Input placeholder="John Doe" value={newContact.contactName} onChange={e => setNewContact(d => ({ ...d, contactName: e.target.value }))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Designation</Label>
+                          <Input placeholder="Sales Manager" value={newContact.contactDesignation} onChange={e => setNewContact(d => ({ ...d, contactDesignation: e.target.value }))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Contact Number</Label>
+                          <Input type="tel" placeholder="+91-9876543210" value={newContact.contactNumber} onChange={e => setNewContact(d => ({ ...d, contactNumber: e.target.value }))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Contact Email</Label>
+                          <Input type="email" placeholder="contact@example.com" value={newContact.contactEmail} onChange={e => setNewContact(d => ({ ...d, contactEmail: e.target.value }))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>LinkedIn URL</Label>
+                          <Input type="text" placeholder="https://linkedin.com/in/..." value={newContact.contactLinkedinURL} onChange={e => setNewContact(d => ({ ...d, contactLinkedinURL: e.target.value }))} />
+                        </div>
+                        <div className="flex items-end gap-2 md:col-start-3">
+                          <Button type="button" onClick={handleAddContact} disabled={isSubmittingContact}>{isSubmittingContact && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Add Contact</Button>
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -1673,7 +1980,9 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
             <TabsContent value="interactions">
               <Card>
                 <CardHeader>
-                  <CardTitle>Interactions</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Interactions</CardTitle>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {interactions.length > 0 ? (
@@ -1722,6 +2031,109 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                   ) : (
                     <p className="text-muted-foreground text-center py-4">No interactions found.</p>
                   )}
+                  <Collapsible open={isInteractionFormOpen} onOpenChange={setIsInteractionFormOpen} className="mt-4">
+                    <CollapsibleTrigger asChild>
+                      <Button type="button" variant="outline" onClick={() => setIsInteractionFormOpen(!isInteractionFormOpen)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Interaction
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-4">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border p-4 rounded-md">
+                        <div className="space-y-2">
+                          <Label>ISR</Label>
+                          <Select value={newInteraction.isrId} onValueChange={value => setNewInteraction(d => ({ ...d, isrId: value }))}>
+                            <SelectTrigger><SelectValue placeholder="Select ISR" /></SelectTrigger>
+                            <SelectContent>
+                              {users.filter(u => ['isr', 'fsr', 'bde'].includes(u.role)).map(user => (
+                                <SelectItem key={user.id} value={user.id}>{user.name}-{user.role.toLocaleUpperCase()}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Contact Person</Label>
+                          <Select
+                            value={newInteraction.contactPerson}
+                            onValueChange={value => {
+                              const selectedContact = additionalContacts.find((contact: any) => contact.contactName === value);
+                              setNewInteraction(d => ({
+                                ...d,
+                                contactPerson: value,
+                                designation: selectedContact?.contactDesignation || '',
+                                contactNumber: selectedContact?.contactNumber || '',
+                                contactEmail: selectedContact?.contactEmail || '',
+                              }));
+                            }}
+                          >
+                            <SelectTrigger><SelectValue placeholder="Select contact" /></SelectTrigger>
+                            <SelectContent>
+                              {additionalContacts.map((contact: any, index: number) => (
+                                <SelectItem key={`${contact.contactName}-${index}`} value={contact.contactName}>
+                                  {contact.contactName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Product</Label>
+                          <Select value={newInteraction.productName} onValueChange={value => setNewInteraction(d => ({ ...d, productName: value }))}>
+                            <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
+                            <SelectContent>
+                              {products.map(product => (
+                                <SelectItem key={product.id} value={product.name}>{product.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Source of Lead</Label>
+                          <Select value={newInteraction.source_of_lead} onValueChange={value => setNewInteraction(d => ({ ...d, source_of_lead: value }))}>
+                            <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                            <SelectContent>
+                              {sourceOfLeadOptions.map(option => (
+                                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Feedback Status</Label>
+                          <Select
+                            value={newInteraction.feedback_status}
+                            onValueChange={value =>
+                              setNewInteraction(d => ({
+                                ...d,
+                                feedback_status: value,
+                                followup_date: followupFeedbackStatuses.includes(value as any) ? d.followup_date : '',
+                              }))
+                            }
+                          >
+                            <SelectTrigger><SelectValue placeholder="Select feedback" /></SelectTrigger>
+                            <SelectContent>
+                              {feedbackStatusOptions.map(option => (
+                                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {followupFeedbackStatuses.includes(newInteraction.feedback_status as any) && (
+                          <div className="space-y-2">
+                            <Label>Follow-up Date</Label>
+                            <Input type="date" value={newInteraction.followup_date} onChange={e => setNewInteraction(d => ({ ...d, followup_date: e.target.value }))} />
+                          </div>
+                        )}
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Feedback Notes</Label>
+                          <Textarea placeholder="Enter feedback notes" value={newInteraction.feedback_notes} onChange={e => setNewInteraction(d => ({ ...d, feedback_notes: e.target.value }))} />
+                        </div>
+                        <div className="flex items-end gap-2 md:col-span-4 justify-end">
+                          <Button type="button" onClick={handleAddInteraction} disabled={isSubmittingInteraction}>{isSubmittingInteraction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Add Interaction</Button>
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 </CardContent>
               </Card>
             </TabsContent>
