@@ -13,6 +13,7 @@ export const API_ENDPOINTS = {
   SEND_CRM_ADMIN_CREDENTIALS: `${API_BASE_URL}/send_crm_admin_credentials/`,
   CREATE_USER_ON_CRM: `${API_BASE_URL}/create_user_on_crm/`,
   GET_RESELLER_CUSTOEMRS_LIST_ONCRM: `${API_BASE_URL}/get_resellers_customers_lists_oncrm/`,
+  GET_RESELLER_CUSTOEMRS_LIST_ONCRM_MAPPING: `${API_BASE_URL}/get_resellers_customers_lists_oncrm_mapping/`,
 
   MAP_CUSTOMER_PARTNER_ONCRM: `${API_BASE_URL}/map_customer_partner_oncrm/`,
   UPLOAD_PARTNER_DOCUMENT_CRM: `${API_BASE_URL}/upload_partner_document_crm/`,

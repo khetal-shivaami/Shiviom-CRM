@@ -74,7 +74,7 @@ export const MapCustomersDialog = ({ partners, customers, open, onOpenChange, on
             formData.append('user_id', user.id);
             formData.append('role', profile.role);
         }
-        const response = await fetch(API_ENDPOINTS.GET_RESELLER_CUSTOEMRS_LIST_ONCRM, {
+        const response = await fetch(API_ENDPOINTS.GET_RESELLER_CUSTOEMRS_LIST_ONCRM_MAPPING, {
           method: 'POST', // Assuming POST based on other API calls
            body: formData,
         });
