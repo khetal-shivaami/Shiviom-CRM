@@ -158,6 +158,7 @@ const feedbackStatusOptions = [
   { value: 'qc-notqualified', label: 'QC-NotQualified' },
   { value: 'connected-email', label: 'Connected Email' },
   { value: 'lead-prospect', label: 'Lead Prospect' },
+  { value: 'data-profiling', label: 'Data Profiling' },
 ] as const;
 
 const sourceOfLeadOptions = [
@@ -1170,7 +1171,7 @@ export const EditPartnerDialog = ({ partner, users, open, onOpenChange, onSucces
                                 {currentUser.name}-{currentUser.role.toLocaleUpperCase()}
                               </SelectItem>
                             ) : (
-                              users.filter(u => ['isr', 'fsr', 'bde'].includes(u.role)).map(user => (
+                              users.filter(u => ['isr', 'fsr', 'bde','team-leader'].includes(u.role)).map(user => (
                                 <SelectItem key={user.id} value={user.id}>{user.name}-{user.role.toLocaleUpperCase()}</SelectItem>
                               ))
                             )}

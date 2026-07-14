@@ -130,6 +130,7 @@ const feedbackStatusOptions = [
   { value: 'qc-notqualified', label: 'QC-NotQualified' },
   { value: 'connected-email', label: 'Connected Email' },
   { value: 'lead-prospect', label: 'Lead Prospect' },
+  { value: 'data-profiling', label: 'Data Profiling' },
 ] as const;
 
 const sourceOfLeadOptions = [
@@ -460,7 +461,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
   });
 
   const currentUser = users.find(u => u.id === user?.id);
-  const isRestrictedRole = currentUser && currentUser.role === 'isr' || currentUser.role === 'fsr' || currentUser.role === 'bde';
+  const isRestrictedRole = currentUser && currentUser.role === 'isr' || currentUser.role === 'fsr' || currentUser.role === 'bde' || currentUser.role === 'team-leader';
   const isIsrRole = currentUser?.role === 'isr';
 
   useEffect(() => {
@@ -1214,7 +1215,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                       ) : (
                         <>
                           <SelectItem value="none">Unassigned</SelectItem>
-                          {users.filter((u) => ['isr', 'fsr', 'bde'].includes(u.role)).map((u) => (
+                          {users.filter((u) => ['isr', 'fsr', 'bde','team-leader'].includes(u.role)).map((u) => (
                             <SelectItem key={u.id} value={u.id}>{u.name}-{u.role.toLocaleUpperCase()}</SelectItem>
                           ))}
                         </>
@@ -1400,7 +1401,7 @@ const AddPartnerForm = ({ users, onSuccess, onCancel }: AddPartnerFormProps) => 
                             {currentUser.name}
                           </SelectItem>
                         ) : (
-                          users.filter((u) => ['fsr', 'bde', 'isr'].includes(u.role)).map((u) => (
+                          users.filter((u) => ['fsr', 'bde', 'isr','team-leader'].includes(u.role)).map((u) => (
                             <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
                           ))
                         )}

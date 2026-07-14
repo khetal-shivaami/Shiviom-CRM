@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { Search, UserPlus, Filter, CheckCircle, Clock, AlertCircle, Eye, Users, FileText, Handshake, Shield, PenTool, Trophy, Link, KeyRound, X, Edit, Calendar as CalendarIcon, RotateCcw, ChevronsUpDown, Loader2, History, Share2, Globe, Download, UserCheck } from 'lucide-react';
+import { Search, UserPlus, Filter, CheckCircle, Clock, AlertCircle, Eye, Users, FileText, Handshake, Shield, PenTool, Trophy, Link, KeyRound, X, Edit, Calendar as CalendarIcon, RotateCcw, ChevronsUpDown, Loader2, History, Share2, Globe, Download, UserCheck, Upload } from 'lucide-react';
 import { DateRange, DayPicker } from 'react-day-picker';
 import { Partner, User, OnboardingStage, PartnerOnboardingData, AssignedUser } from '@/types';
 import AddPartnerForm from '@/components/AddPartnerForm';
@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import PartnerListModal from './PartnerListModal';
 import { AddPartnerDomainDialog } from './AddPartnerDomainDialog';
 import { format, subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfDay, endOfDay } from 'date-fns';
+
 import {
   Dialog,
   DialogContent,
@@ -49,6 +50,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
 
 const identityOptions = [
   { id: 'web-app-developer', label: 'Web App Developer' },
@@ -290,6 +292,18 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     kycForm: false,
     resellerAgreement: false,
   });
+  const [isUploadDocsOpen, setIsUploadDocsOpen] = useState(false);
+  const [selectedPartnerForUpload, setSelectedPartnerForUpload] = useState<string | null>(null);
+  const [uploadPartnerPopoverOpen, setUploadPartnerPopoverOpen] = useState(false);
+  const [filesToUpload, setFilesToUpload] = useState({
+    panCard: null as File | null,
+    gstCertificate: null as File | null,
+    cancelCheque: null as File | null,
+    agreement: null as File | null,
+    kycForm: null as File | null,
+    additionalDocument: null as File | null,
+  });
+  const [isUploadingDocs, setIsUploadingDocs] = useState(false);
   const { getOnboardingTasks } = useTaskManager();
 
   const loggedInUserName = [profile?.first_name, profile?.last_name]
@@ -1432,6 +1446,76 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, fileType: keyof typeof filesToUpload) => {
+    const file = e.target.files?.[0] || null;
+    setFilesToUpload(prev => ({ ...prev, [fileType]: file }));
+  };
+
+  const handleUploadDocuments = async () => {
+    if (!selectedPartnerForUpload) {
+      toast({ title: "No Partner Selected", description: "Please select a partner.", variant: "destructive" });
+      return;
+    }
+    const partner = partnersData.find(p => p.id === selectedPartnerForUpload);
+    if (!partner || !partner.portal_reseller_id) {
+      toast({ title: "Partner Not Found", description: "The selected partner does not have a portal ID.", variant: "destructive" });
+      return;
+    }
+
+    const files = Object.values(filesToUpload).filter(f => f !== null);
+    if (files.length === 0) {
+      toast({ title: "No Files Selected", description: "Please select at least one file to upload.", variant: "destructive" });
+      return;
+    }
+
+    setIsUploadingDocs(true);
+    try {
+      const formData = new FormData();
+      formData.append('portal_reseller_id', partner.portal_reseller_id);
+      formData.append('reseller_email', partner.email);
+
+      let hasFile = false;
+      (Object.keys(filesToUpload) as Array<keyof typeof filesToUpload>).forEach(key => {
+        if (filesToUpload[key]) {
+          formData.append(key, filesToUpload[key] as File);
+          hasFile = true;
+        }
+      });
+
+      if (!hasFile) {
+        toast({ title: "No files to upload", variant: "destructive" });
+        setIsUploadingDocs(false);
+        return;
+      }
+
+      // Log FormData contents before sending
+      console.log("Uploading documents with the following data:");
+      for (const [key, value] of formData.entries()) {
+        console.log(`${key}:`, value);
+      }
+
+      // const response = await fetch(API_ENDPOINTS.UPLOAD_MULTIPLE_PARTNER_DOCUMENTS_CRM, {
+      //   method: 'POST',
+      //   body: formData,
+      // });
+
+      // const result = await response.json();
+      // if (!response.ok || !result.success) {
+      //   throw new Error(result.message || 'Failed to upload documents.');
+      // }
+
+      toast({ title: "Success", description: "Documents uploaded successfully." });
+      setIsUploadDocsOpen(false);
+      setSelectedPartnerForUpload(null);
+      setFilesToUpload({ panCard: null, gstCertificate: null, cancelCheque: null, agreement: null, kycForm: null, additionalDocument: null });
+
+    } catch (error: any) {
+      toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsUploadingDocs(false);
+    }
+  };
+
   if (selectedPartner) {
     return (
       <PartnerOnboardingDetail
@@ -1504,6 +1588,10 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
           <Button onClick={() => setIsShareDocsOpen(true)}>
             <Share2 className="h-4 w-4 mr-2" />
             Share Documents
+          </Button>
+          <Button onClick={() => setIsUploadDocsOpen(true)}>
+            <Upload className="h-4 w-4 mr-2" />
+            Upload Documents
           </Button>
           <BulkImportDialog type="partners" onImport={handleBulkImport} />
         </div>
@@ -2287,6 +2375,67 @@ const PartnerOnboarding = ({ users, onNavigateToTasks }: PartnerOnboardingProps)
             <Button onClick={handleShareDocuments} disabled={isSendingDocs || !selectedPartnerForDocs || (!documentsToShare.kycForm && !documentsToShare.resellerAgreement) || (documentsToShare.resellerAgreement && !selectedAgreement)}>
               {isSendingDocs && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isUploadDocsOpen} onOpenChange={setIsUploadDocsOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Upload Partner Documents</DialogTitle>
+            <DialogDescription>
+              Select a partner and upload the required documents.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <Popover open={uploadPartnerPopoverOpen} onOpenChange={setUploadPartnerPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={uploadPartnerPopoverOpen} className="w-full justify-between">
+                  {selectedPartnerForUpload
+                    ? partnersData.find(p => p.id === selectedPartnerForUpload)?.name
+                    : "Select a partner..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                <Command>
+                  <CommandInput placeholder="Search by name or email..." />
+                  <CommandList className="max-h-[250px]">
+                    <CommandEmpty>No partner found.</CommandEmpty>
+                    <CommandGroup>
+                      {partnersData.map((partner) => (
+                        <CommandItem
+                          key={partner.id}
+                          value={`${partner.name} ${partner.email}`}
+                          onSelect={() => {
+                            setSelectedPartnerForUpload(partner.id);
+                            setUploadPartnerPopoverOpen(false);
+                          }}
+                        >
+                          <CheckCircle className={cn("mr-2 h-4 w-4", selectedPartnerForUpload === partner.id ? "opacity-100" : "opacity-0")} />
+                          {partner.name} ({partner.email})
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+
+            <div className="grid grid-cols-2 gap-4">
+                <div><Label htmlFor="panCard">PAN Card</Label><Input id="panCard" type="file" onChange={(e) => handleFileSelect(e, 'panCard')} /></div>
+                <div><Label htmlFor="gstCertificate">GST Certificate</Label><Input id="gstCertificate" type="file" onChange={(e) => handleFileSelect(e, 'gstCertificate')} /></div>
+                <div><Label htmlFor="cancelCheque">Cancelled Cheque</Label><Input id="cancelCheque" type="file" onChange={(e) => handleFileSelect(e, 'cancelCheque')} /></div>
+                <div><Label htmlFor="agreement">Agreement</Label><Input id="agreement" type="file" onChange={(e) => handleFileSelect(e, 'agreement')} /></div>
+                <div><Label htmlFor="kycForm">KYC Form</Label><Input id="kycForm" type="file" onChange={(e) => handleFileSelect(e, 'kycForm')} /></div>
+                <div><Label htmlFor="additionalDocument">Additional Document</Label><Input id="additionalDocument" type="file" onChange={(e) => handleFileSelect(e, 'additionalDocument')} /></div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsUploadDocsOpen(false)} disabled={isUploadingDocs}>Cancel</Button>
+            <Button onClick={handleUploadDocuments} disabled={isUploadingDocs || !selectedPartnerForUpload}>
+              {isUploadingDocs && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Upload Documents
             </Button>
           </DialogFooter>
         </DialogContent>

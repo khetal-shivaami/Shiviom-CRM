@@ -281,6 +281,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
     { value: 'qc-pending', label: 'QC-Pending' },
     { value: 'qc-qualified', label: 'QC-Qualified' },
     { value: 'qc-notqualified', label: 'QC-NotQualified' },
+    { value: 'data-profiling', label: 'Data Profiling' },
   ] as const;
 
   const sourceOfLeadOptions = [
@@ -1686,7 +1687,7 @@ const PartnerOnboardingDetail = ({ partner, users, onBack, onNavigateToTasks }: 
                           <Select value={newInteraction.isrId} onValueChange={value => setNewInteraction(d => ({ ...d, isrId: value }))}>
                             <SelectTrigger><SelectValue placeholder="Select ISR" /></SelectTrigger>
                             <SelectContent>
-                              {users.filter(u => ['isr', 'fsr', 'bde'].includes(u.role)).map(user => (
+                              {users.filter(u => ['isr', 'fsr', 'bde','team-leader'].includes(u.role)).map(user => (
                                 <SelectItem key={user.id} value={user.id}>{user.name}-{user.role.toLocaleUpperCase()}</SelectItem>
                               ))}
                             </SelectContent>
