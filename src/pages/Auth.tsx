@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,22 +8,17 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { ImageCarousel } from '@/components/ImageCarousel';
-import { Eye, EyeOff, Loader as Loader2, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 const CrmLogo = () => (
   <div className="flex items-center gap-3 text-white">
-    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 backdrop-blur-sm">
-      <img
-        src="https://storage.googleapis.com/shiviom-website-content/company_logo/shiviom.png"
-        alt="Shiviom Logo"
-        className="h-7 w-7 object-contain brightness-0 invert"
-      />
-    </div>
-    <div className="flex flex-col">
-      <span className="text-lg font-bold leading-tight">Shiviom CRM</span>
-      <span className="text-[11px] text-slate-400 leading-tight">Partner Management Suite</span>
-    </div>
+    <img
+      src="https://storage.googleapis.com/shiviom-website-content/company_logo/shiviom.png"
+      alt="Shiviom Logo"
+      className="h-25 w-23"
+    />
+    {/* <span className="font-semibold text-2xl tracking-tight">Shiviom CRM</span> */}
   </div>
 );
 
@@ -33,6 +28,7 @@ const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [showCredentials, setShowCredentials] = useState(false);
 
   const { signIn, user, signOut } = useAuth();
   const { toast } = useToast();
@@ -53,8 +49,9 @@ const Auth: React.FC = () => {
     setError('');
 
     try {
+      // Step 1: Authenticate with Supabase Auth. This checks against the auth.users table.
       const { data: authData, error: authError } = await signIn(email, password);
-
+      
       if (authError || !authData?.user) {
         const message = authError?.message || 'Invalid login credentials.';
         setError(message);
@@ -63,22 +60,26 @@ const Auth: React.FC = () => {
           description: message,
           variant: "destructive",
         });
+        // If an error occurred but a user object was still returned (e.g. email not confirmed),
+        // we must sign out to prevent the useEffect hook from navigating to the dashboard.
         if (authData?.user) {
           await signOut();
         }
         return;
       }
 
+      // Step 2: Authorize against the 'profiles' table.
+      // After successful authentication, we check the user's profile for status.
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('status')
         .eq('user_id', authData.user.id)
-        .maybeSingle();
+        .single();
 
       if (profileError || !profile) {
         setError("Could not retrieve your user profile. Please try again or contact support.");
         toast({ title: "Login Error", description: "Failed to retrieve user profile.", variant: "destructive" });
-        await signOut();
+        await signOut(); // Sign out if profile is missing
         return;
       }
 
@@ -86,19 +87,22 @@ const Auth: React.FC = () => {
         const message = `Your account is currently ${profile.status}. Please contact an administrator.`;
         setError(message);
         toast({ title: "Login Denied", description: message, variant: "destructive" });
-        await signOut();
+        await signOut(); // Sign out if user is not active
         return;
       }
 
+      // Step 3: Update last_login timestamp in the profile.
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ last_login: new Date().toISOString() })
         .eq('user_id', authData.user.id);
 
       if (updateError) {
+        // Log this error but don't prevent the user from logging in.
         console.error("Failed to update last login time:", updateError.message);
       }
 
+      // Step 4: Success! User is authenticated and authorized.
       toast({
         title: "Welcome back!",
         description: "You have been successfully logged in.",
@@ -116,13 +120,13 @@ const Auth: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen relative flex items-center justify-center p-4">
+     <div className="w-full min-h-screen relative flex items-center justify-center p-4">
       {/* Background */}
       <div className="absolute inset-0 z-0 overflow-hidden">
         <div className="absolute inset-0">
           <ImageCarousel />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950/95 via-slate-900/90 to-slate-800/85" />
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/100 to-slate-800/90" />
         <div
           className="absolute inset-0"
           style={{
@@ -131,27 +135,25 @@ const Auth: React.FC = () => {
           }}
         />
       </div>
-
       {/* Content */}
-      <div className="relative z-10 w-full max-w-md space-y-6 animate-in-up">
+      <div className="relative z-10 w-full max-w-md space-y-6">
         <div className="flex justify-center">
           <CrmLogo />
         </div>
         <div className="text-center">
-          <h1 className="text-[28px] font-bold tracking-tight text-white">Welcome back</h1>
-          <p className="text-slate-400 text-sm mt-1">Sign in to continue to Shiviom CRM</p>
+          <h1 className="text-3xl font-bold tracking-tight text-white">Welcome Back</h1>
+          <p className="text-slate-300">Sign in to continue to Shiviom CRM</p>
         </div>
-
-        <Card className="bg-background/90 backdrop-blur-md border-slate-700/50 shadow-2xl">
-          <CardContent className="p-7">
-            <form onSubmit={handleSubmit} className="space-y-5">
+        <Card className="bg-background/80 backdrop-blur-sm border-slate-700">
+          <CardContent className="p-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
-                <Alert variant="destructive" className="text-sm">
+                <Alert variant="destructive">
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-[13px] font-medium">Email</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
@@ -160,11 +162,10 @@ const Auth: React.FC = () => {
                   required
                   disabled={loading}
                   placeholder="name@company.com"
-                  className="h-11"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-[13px] font-medium">Password</Label>
+                <Label htmlFor="password">Password</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -174,36 +175,65 @@ const Auth: React.FC = () => {
                     required
                     disabled={loading}
                     placeholder="••••••••"
-                    className="h-11 pr-10"
+                    className="pr-10"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground transition-colors"
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-gray-600"
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
-              <Button type="submit" className="w-full h-11 text-sm font-semibold" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
-                ) : 'Sign In'}
+              {/* <div className="flex items-center justify-end">
+                <Link
+                  to="/auth/reset"
+                  className="text-sm font-medium text-primary hover:underline"
+                >
+                  Forgot your password?
+                </Link>
+              </div> */}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
           </CardContent>
         </Card>
-
-        <div className="flex items-center justify-center gap-1.5 text-slate-500 text-xs">
-          <ShieldCheck className="h-3.5 w-3.5" />
-          <span>Secured by Supabase Auth</span>
-        </div>
+        {/* <div className="text-center">
+          <Button variant="link" className="text-slate-300 hover:text-white" onClick={() => setShowCredentials(!showCredentials)}>
+            {showCredentials ? 'Hide' : 'Show'} Test Credentials
+          </Button>
+        </div> */}
+        {showCredentials && (
+          <Card className="border-amber-200/30 bg-amber-950/50 backdrop-blur-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg text-amber-200">
+                Test Credentials
+              </CardTitle>
+              <p className="text-sm text-amber-300">
+                Create these users in Supabase Dashboard first, then use for testing:
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="space-y-1">
+                <p className="font-medium text-amber-200">Admin Account:</p>
+                <p className="text-amber-300 font-mono">admin@shiviom.com / admin123</p>
+              </div>
+              <div className="space-y-1">
+                <p className="font-medium text-amber-200">Manager Account:</p>
+                <p className="text-amber-300 font-mono">manager@shiviom.com / manager123</p>
+              </div>
+              <div className="space-y-1">
+                <p className="font-medium text-amber-200">User Account:</p>
+                <p className="text-amber-300 font-mono">user@shiviom.com / user123</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      <div className="absolute z-10 bottom-5 text-slate-500 text-xs">
+      <div className="absolute z-10 bottom-5  text-slate-400 text-sm">
         &copy; {new Date().getFullYear()} Shiviom Inc. All rights reserved.
       </div>
     </div>
