@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label as ShadcnLabel } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast'; 
-import { Edit2, Trash2, Plus, Save, PlusCircle, Loader2 } from 'lucide-react';
+import { CreditCard as Edit2, Trash2, Plus, Save, CirclePlus as PlusCircle, Loader as Loader2 } from 'lucide-react';
 import { Product, ProductPlan } from '../types';
 import { supabase } from '@/integrations/supabase/client';
 import { API_ENDPOINTS } from '@/config/api';
@@ -541,8 +541,6 @@ const PlanManagementDialog = ({ product, trigger, onSuccess }: PlanManagementDia
                       value={formData.price}
                       onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                       placeholder="Enter price per user"
-                      step="0.01"
-                      min="0"
                     />
                   </div>
 
@@ -557,11 +555,7 @@ const PlanManagementDialog = ({ product, trigger, onSuccess }: PlanManagementDia
                       step="0.01"
                       value={formData.renewalPrice}
                       onChange={(e) => setFormData({ ...formData, renewalPrice: e.target.value })}
-                      value={formData.renewalPrice}
-                      onChange={(e) => setFormData({ ...formData, renewalPrice: e.target.value })}
                       placeholder="Optional: if different from new price"
-                      step="0.01"
-                      min="0"
                     />
                   </div>
                   <div className="space-y-2">

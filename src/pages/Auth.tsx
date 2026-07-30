@@ -73,7 +73,7 @@ const Auth: React.FC = () => {
         .from('profiles')
         .select('status')
         .eq('user_id', authData.user.id)
-        .single();
+        .maybeSingle();
 
       if (profileError || !profile) {
         setError("Could not retrieve your user profile. Please try again or contact support.");
